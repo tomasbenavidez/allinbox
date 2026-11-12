@@ -1,0 +1,69 @@
+{
+  "name": "allinbox",
+  "version": "0.2.0",
+  "description": "All your inboxes, one query, any agent. MCP server for multi-account email search.",
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "email",
+    "imap",
+    "gmail",
+    "inbox",
+    "claude",
+    "codex",
+    "gemini",
+    "cursor",
+    "ai-agent"
+  ],
+  "author": "Tomás Benavidez (https://github.com/tomasbenavidez)",
+  "homepage": "https://github.com/tomasbenavidez/allinbox#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tomasbenavidez/allinbox.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tomasbenavidez/allinbox/issues"
+  },
+  "main": "dist/server.js",
+  "scripts": {
+    "test": "node --import tsx --test test/*.test.ts",
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "prepublishOnly": "pnpm run build && pnpm test"
+  },
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "allinbox": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@napi-rs/keyring": "^2.1.2",
+    "html-to-text": "^10.0.1",
+    "imapflow": "^2.11.0",
+    "mailparser": "^3.14.2",
+    "nodemailer": "^10.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/html-to-text": "^9.0.4",
+    "@types/mailparser": "^3.9.0",
+    "@types/node": "^26.6.6",
+    "@types/nodemailer": "^8.0.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "packageManager": "pnpm@10.7.1",
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

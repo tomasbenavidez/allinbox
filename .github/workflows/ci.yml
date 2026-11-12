@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # The OS spread is the point: the keychain module is native and agent paths differ per OS.
+        # Node 20 (oldest supported) only on Linux: macOS minutes cost 10x on private repos.
+        include:
+          - { os: ubuntu-latest, node: 20 }
+          - { os: ubuntu-latest, node: 22, integration: true }
+          - { os: windows-latest, node: 22 }
+          - { os: macos-latest, node: 22 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # version comes from package.json "packageManager"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      - name: Pre-pull GreenMail
+        if: matrix.integration
+        run: docker pull -q greenmail/standalone:2.1.5
+
+      - run: pnpm test
+        env:
+          # Integration tests (real IMAP against GreenMail) must run here, never silently skip.
+          REQUIRE_INTEGRATION: ${{ matrix.integration && '1' || '0' }}
