@@ -104,6 +104,24 @@ Giving an AI access to your email deserves a straight answer:
 - **Local only.** No server, no account, no telemetry. Passwords live in your OS keychain (Windows Credential Manager, macOS Keychain, libsecret). `~/.allinbox/config.json` holds only hosts and usernames.
 - **Pinned.** Agents are registered with an exact version, so a future release never runs without you re-running setup.
 
+## Install as a plugin or extension
+
+Run `npx allinbox` once first to add your accounts. Then, instead of letting the setup edit
+your agent's config:
+
+**Claude Code plugin** (includes a skill that teaches Claude how to use allinbox)
+```bash
+claude plugin marketplace add tomasbenavidez/allinbox
+claude plugin install allinbox@allinbox
+```
+
+**Gemini CLI extension**
+```bash
+gemini extensions install https://github.com/tomasbenavidez/allinbox
+```
+
+**Claude Desktop**: download `allinbox.mcpb` from the [latest release](https://github.com/tomasbenavidez/allinbox/releases/latest) and open it (or drag it into Settings → Extensions).
+
 ## Connect an agent manually
 
 The setup does this for you. If you prefer to do it by hand:

@@ -1,0 +1,12 @@
+{
+  "name": "allinbox",
+  "version": "0.3.0",
+  "description": "Search all your email accounts in one query. Read-only IMAP, cannot send; optional reply drafts.",
+  "contextFileName": "plugins/allinbox/skills/allinbox/SKILL.md",
+  "mcpServers": {
+    "allinbox": {
+      "command": "node",
+      "args": ["${extensionPath}${/}plugins${/}allinbox${/}launch.mjs"]
+    }
+  }
+}

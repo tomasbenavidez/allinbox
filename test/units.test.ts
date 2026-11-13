@@ -12,9 +12,14 @@ import { wrapUntrusted } from '../src/server.ts';
 import { formatHits } from '../src/clean.ts';
 import { VERSION } from '../src/version.ts';
 
-test('version.ts matches package.json', async () => {
+test('every pinned version (package, server, plugin, extension, bundle, registry) agrees', async () => {
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(VERSION, pkg.version);
+  const { versionMismatches } = await import('../scripts/check-version.mjs');
+  assert.deepEqual(versionMismatches(), []);
+  assert.deepEqual(versionMismatches(`v${VERSION}`), []);
+  assert.notDeepEqual(versionMismatches('v0.0.1'), []);
+  assert.match(versionMismatches(`${VERSION}`).join(), /not vX\.Y\.Z/);
 });
 
 test('wrapUntrusted defangs forged closing tags; formatHits flattens hostile subjects', () => {

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.tomasbenavidez/allinbox",
+  "title": "allinbox",
+  "description": "Search all your email accounts in one query. Read-only IMAP, cannot send; optional drafts.",
+  "websiteUrl": "https://github.com/tomasbenavidez/allinbox",
+  "repository": {
+    "url": "https://github.com/tomasbenavidez/allinbox",
+    "source": "github"
+  },
+  "version": "0.3.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "allinbox",
+      "version": "0.3.0",
+      "transport": { "type": "stdio" },
+      "packageArguments": [{ "type": "positional", "value": "serve" }]
+    }
+  ]
+}

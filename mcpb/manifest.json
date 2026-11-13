@@ -1,0 +1,35 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/dist/mcpb-manifest-v0.3.schema.json",
+  "manifest_version": "0.3",
+  "name": "allinbox",
+  "display_name": "allinbox",
+  "version": "0.3.0",
+  "description": "All your inboxes, one query. Search every email account at once; read-only, cannot send.",
+  "long_description": "allinbox lets Claude search Gmail, Google Workspace, iCloud, Yahoo, Fastmail and any IMAP account in a single call, merged and deduplicated, with quotes, signatures and HTML stripped.\n\n**Before installing**, add your accounts once in a terminal with `npx allinbox` (requires Node.js 20.12+). The guided setup stores app passwords in your OS keychain; this extension never sees them.\n\nMailboxes are opened read-only and there is no sending code. Drafts are opt-in and limited to recipients you allow.",
+  "author": { "name": "Tomás Benavidez", "url": "https://github.com/tomasbenavidez" },
+  "repository": { "type": "git", "url": "https://github.com/tomasbenavidez/allinbox" },
+  "homepage": "https://github.com/tomasbenavidez/allinbox",
+  "documentation": "https://github.com/tomasbenavidez/allinbox#readme",
+  "support": "https://github.com/tomasbenavidez/allinbox/issues",
+  "license": "MIT",
+  "keywords": ["email", "imap", "gmail", "inbox", "search"],
+  "server": {
+    "type": "node",
+    "entry_point": "server/launch.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/launch.mjs"]
+    }
+  },
+  "tools": [
+    { "name": "list_accounts", "description": "The accounts allinbox can search" },
+    { "name": "search_all", "description": "One query across every account, merged and deduplicated" },
+    { "name": "read_email", "description": "One message by id, cleaned" },
+    { "name": "read_thread", "description": "The whole conversation, oldest first" },
+    { "name": "create_draft", "description": "Only if drafts are enabled: save a draft, never send" }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": { "node": ">=20.12.0" }
+  }
+}

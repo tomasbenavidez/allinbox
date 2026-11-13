@@ -1,0 +1,15 @@
+{
+  "name": "allinbox",
+  "owner": { "name": "Tomás Benavidez", "url": "https://github.com/tomasbenavidez" },
+  "metadata": {
+    "description": "allinbox: all your inboxes, one query, any agent."
+  },
+  "plugins": [
+    {
+      "name": "allinbox",
+      "source": "./plugins/allinbox",
+      "description": "Search all your email accounts in one query. Read-only IMAP, cannot send; optional reply drafts.",
+      "category": "productivity"
+    }
+  ]
+}

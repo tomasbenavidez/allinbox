@@ -1,0 +1,71 @@
+name: Publish
+
+# Runs when a GitHub release is published (tag vX.Y.Z). Publishes to npm with trusted
+# publishing (OIDC, no token; provenance is automatic) and attaches the Claude Desktop bundle.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write # OIDC token for npm trusted publishing
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1; Node 22 ships npm 10.
+      - run: npm install -g npm@^11.5.1
+
+      - name: Tag must match every pinned version
+        run: node scripts/check-version.mjs "${GITHUB_REF_NAME}"
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      - run: docker pull -q greenmail/standalone:2.1.5
+
+      - run: pnpm test
+        env:
+          REQUIRE_INTEGRATION: '1'
+
+      # Already built and tested above; skip prepublishOnly running them again.
+      - run: npm publish --access public --ignore-scripts
+
+  mcpb:
+    needs: npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # upload the bundle to the release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: node scripts/pack-mcpb.mjs
+
+      - run: gh release upload "${GITHUB_REF_NAME}" "dist-mcpb/allinbox.mcpb" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
