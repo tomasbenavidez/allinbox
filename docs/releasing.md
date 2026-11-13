@@ -1,8 +1,11 @@
 # Releasing
 
 Publishing is automated by [`.github/workflows/publish.yml`](../.github/workflows/publish.yml)
-with npm trusted publishing (OIDC): there is no npm token anywhere, and provenance is attached
-automatically.
+with npm **staged** trusted publishing (OIDC): there is no npm token anywhere, provenance is
+attached, and CI can only *stage* a version. **Nothing reaches npm users until the maintainer
+approves the stage with 2FA.**
+
+Flow: GitHub release → workflow stages the package → maintainer approves with 2FA → live.
 
 1. **Bump the version** everywhere it is pinned. `node scripts/check-version.mjs` lists any
    file that disagrees; the unit tests run the same check.
@@ -18,16 +21,26 @@ automatically.
 4. The workflow then:
    - refuses to continue if the tag and any pinned version differ;
    - installs, builds and runs every test, including IMAP integration against GreenMail;
-   - runs `npm publish --access public` (trusted publishing);
-   - builds `allinbox.mcpb` (Claude Desktop) and attaches it to the release.
+   - stages the package with `npm stage publish` (npm 12, Node 24) and prints the **stage id**
+     plus the exact approve command in the job log and the run's summary page;
+   - builds `allinbox.mcpb` (Claude Desktop) and attaches it to the release. The bundle runs
+     `npx allinbox@X.Y.Z`, so it only works once the stage is approved.
+5. **Approve the stage** (2FA prompt). Copy the id from the run summary:
+   ```bash
+   npm stage approve <stage-id>        # npm >= 12; or: npx -y npm@12 stage approve <stage-id>
+   ```
+   npm 12 needs Node ^22.22.2, ^24.15.0 or >= 26. `npm stage list allinbox` shows pending
+   stages, `npm stage view <id>` / `npm stage download <id>` let you inspect the tarball first,
+   and `npm stage reject <id>` discards it. Signed in as the owner, npmjs.com also shows the
+   staged version on the package page.
 
 The Claude Code plugin and the Gemini CLI extension are installed from this repository, so
-they update as soon as the release commit is on `main` and the npm package exists.
+they work as soon as the release commit is on `main` **and** the stage has been approved.
 
 Directory listings (official MCP registry, Smithery, awesome-mcp-servers) are not automated;
 see [`docs/listings.md`](listings.md).
 
-## One-time npm setup (already required before the first automated release)
+## One-time npm setup (required before the first automated release)
 
 On npmjs.com, signed in as the package owner: **allinbox → Settings → Trusted Publisher →
 GitHub Actions**, then enter:
@@ -39,5 +52,9 @@ GitHub Actions**, then enter:
 | Workflow filename | `publish.yml` |
 | Environment | *(leave empty)* |
 
-Save. Optionally, under **Publishing access**, choose "Require two-factor authentication and
-disallow tokens" once the first trusted publish has succeeded.
+Set its permission to **npm stage publish** (staging only) and save. CI then cannot make a
+version live on its own.
+
+Recommended: under **Settings → Publishing access**, choose **"Require two-factor
+authentication and disallow tokens"**. Staged OIDC publishing keeps working, and no leaked
+token can ever publish.

@@ -1,7 +1,8 @@
 name: Publish
 
-# Runs when a GitHub release is published (tag vX.Y.Z). Publishes to npm with trusted
-# publishing (OIDC, no token; provenance is automatic) and attaches the Claude Desktop bundle.
+# Runs when a GitHub release is published (tag vX.Y.Z). STAGES the package on npm with trusted
+# publishing (OIDC, no token, with provenance) and attaches the Claude Desktop bundle.
+# Nothing goes live until the maintainer approves the stage with 2FA (see docs/releasing.md).
 
 on:
   release:
@@ -28,12 +29,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # npm 12 (staged publishing) needs Node ^22.22.2 || ^24.15.0 || >=26.
+          node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
-      # Trusted publishing needs npm >= 11.5.1; Node 22 ships npm 10.
-      - run: npm install -g npm@^11.5.1
+      - run: npm install -g npm@12
 
       - name: Tag must match every pinned version
         run: node scripts/check-version.mjs "${GITHUB_REF_NAME}"
@@ -48,8 +49,13 @@ jobs:
         env:
           REQUIRE_INTEGRATION: '1'
 
-      # Already built and tested above; skip prepublishOnly running them again.
-      - run: npm publish --access public --ignore-scripts
+      # Already built and tested above; --ignore-scripts skips prepublishOnly running them again.
+      - name: Stage on npm (goes live only after 2FA approval)
+        run: |
+          npm stage publish . --access public --provenance --ignore-scripts --json > stage.json || { cat stage.json; exit 1; }
+          cat stage.json
+          node scripts/stage-summary.mjs stage.json >> "$GITHUB_STEP_SUMMARY"
+          node scripts/stage-summary.mjs stage.json
 
   mcpb:
     needs: npm

@@ -116,3 +116,11 @@ test('presetForMx recognizes Google Workspace and Microsoft 365 domains', async 
   const gmail = presetFor('a@gmail.com')!;
   assert.equal(gmail.forAccount!('https://x/y', 'a+b@uni.edu'), 'https://x/y?authuser=a%2Bb%40uni.edu');
 });
+
+test('stage-summary finds the npm stage id and prints the approve command', async () => {
+  const { findStage, summary } = await import('../scripts/stage-summary.mjs');
+  const stage = findStage({ allinbox: { id: 'allinbox@9.9.9', name: 'allinbox', stageId: 'stg_123' } });
+  assert.deepEqual(stage, { id: 'stg_123', pkg: 'allinbox@9.9.9' });
+  assert.match(summary(stage), /npm stage approve stg_123/);
+  assert.equal(findStage({ id: 'allinbox@9.9.9' }), undefined);
+});
