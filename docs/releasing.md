@@ -5,7 +5,8 @@ with npm **staged** trusted publishing (OIDC): there is no npm token anywhere, p
 attached, and CI can only *stage* a version. **Nothing reaches npm users until the maintainer
 approves the stage with 2FA.**
 
-Flow: GitHub release → workflow stages the package → maintainer approves with 2FA → live.
+Flow: GitHub release → workflow stages the package → maintainer approves with 2FA → live on
+npm → run the registry workflow → listed in the official MCP registry.
 
 1. **Bump the version** everywhere it is pinned. `node scripts/check-version.mjs` lists any
    file that disagrees; the unit tests run the same check.
@@ -33,12 +34,20 @@ Flow: GitHub release → workflow stages the package → maintainer approves wit
    stages, `npm stage view <id>` / `npm stage download <id>` let you inspect the tarball first,
    and `npm stage reject <id>` discards it. Signed in as the owner, npmjs.com also shows the
    staged version on the package page.
+6. **List it in the official MCP registry** (needs the npm version live, so after step 5):
+   ```bash
+   gh workflow run registry.yml -f version=X.Y.Z
+   ```
+   [`registry.yml`](../.github/workflows/registry.yml) checks out tag `vX.Y.Z`, refuses if
+   `allinbox@X.Y.Z` is not on npm yet, downloads `mcp-publisher` (pinned, sha256-verified),
+   logs in with GitHub OIDC and publishes `server.json`. Re-running it for a version that is
+   already listed succeeds without changes.
 
 The Claude Code plugin and the Gemini CLI extension are installed from this repository, so
 they work as soon as the release commit is on `main` **and** the stage has been approved.
 
-Directory listings (official MCP registry, Smithery, awesome-mcp-servers) are not automated;
-see [`docs/listings.md`](listings.md).
+Other directory listings (Smithery, awesome-mcp-servers) are not automated; see
+[`docs/listings.md`](listings.md).
 
 ## One-time npm setup (required before the first automated release)
 

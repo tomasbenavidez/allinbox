@@ -31,6 +31,12 @@ export function summary(stage) {
     '',
     `To discard it instead: \`npm stage reject ${stage.id}\``,
     '',
+    'After approving, list the new version in the official MCP registry:',
+    '',
+    '```bash',
+    `gh workflow run registry.yml -f version=${stage.pkg.split('@').pop()}`,
+    '```',
+    '',
   ].join('\n');
 }
 

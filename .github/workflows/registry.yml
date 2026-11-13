@@ -1,0 +1,84 @@
+name: MCP registry
+
+# Publishes server.json to the official MCP registry (registry.modelcontextprotocol.io).
+# Run by hand AFTER the npm stage is approved: the registry checks that the npm version exists.
+#   gh workflow run registry.yml -f version=X.Y.Z
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to list (X.Y.Z). Empty = the version in package.json on the selected branch.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-registry
+  cancel-in-progress: false
+
+env:
+  MCP_PUBLISHER_VERSION: '1.8.9'
+  # sha256 of mcp-publisher_linux_amd64.tar.gz for that version (also checked against the
+  # release's checksums file). Update both together.
+  MCP_PUBLISHER_SHA256: 4d527ca8f1ced0394c962dc925c2a4a4addef441cbefd62501c875e9481823a8
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write # GitHub OIDC login to the registry (io.github.tomasbenavidez/*)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags
+
+      - name: Resolve version and check out its tag
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          V="${INPUT_VERSION:-$(node -p "require('./package.json').version")}"
+          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$V' is not X.Y.Z"; exit 1
+          fi
+          git rev-parse -q --verify "refs/tags/v$V" >/dev/null || { echo "::error::Tag v$V does not exist"; exit 1; }
+          git checkout -q --detach "v$V"
+          node scripts/check-version.mjs "v$V"
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+
+      - name: npm version must be live (stage approved)
+        run: |
+          if ! npm view "allinbox@$VERSION" version >/dev/null 2>&1; then
+            echo "::error::allinbox@$VERSION is not on npm yet. Approve the npm stage first (npm stage approve <stage-id>), then re-run this workflow."
+            exit 1
+          fi
+
+      - name: Download and verify mcp-publisher
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$RUNNER_TEMP"
+          gh release download "v$MCP_PUBLISHER_VERSION" -R modelcontextprotocol/registry \
+            -p mcp-publisher_linux_amd64.tar.gz -p "registry_${MCP_PUBLISHER_VERSION}_checksums.txt"
+          echo "$MCP_PUBLISHER_SHA256  mcp-publisher_linux_amd64.tar.gz" | sha256sum -c -
+          grep ' mcp-publisher_linux_amd64.tar.gz$' "registry_${MCP_PUBLISHER_VERSION}_checksums.txt" | sha256sum -c -
+          tar xzf mcp-publisher_linux_amd64.tar.gz mcp-publisher
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - run: mcp-publisher login github-oidc
+
+      - name: Publish server.json
+        run: |
+          set +e
+          out="$(mcp-publisher publish 2>&1)"; code=$?
+          echo "$out"
+          if [ $code -ne 0 ] && echo "$out" | grep -qiE 'cannot publish duplicate version|already exists'; then
+            echo "::notice::$VERSION is already in the MCP registry; nothing to do."
+            code=0
+          fi
+          [ $code -eq 0 ] && echo "Listed io.github.tomasbenavidez/allinbox $VERSION: https://registry.modelcontextprotocol.io/v0/servers?search=io.github.tomasbenavidez/allinbox" >> "$GITHUB_STEP_SUMMARY"
+          exit $code

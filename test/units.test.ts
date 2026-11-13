@@ -122,5 +122,6 @@ test('stage-summary finds the npm stage id and prints the approve command', asyn
   const stage = findStage({ allinbox: { id: 'allinbox@9.9.9', name: 'allinbox', stageId: 'stg_123' } });
   assert.deepEqual(stage, { id: 'stg_123', pkg: 'allinbox@9.9.9' });
   assert.match(summary(stage), /npm stage approve stg_123/);
+  assert.match(summary(stage), /gh workflow run registry.yml -f version=9.9.9/);
   assert.equal(findStage({ id: 'allinbox@9.9.9' }), undefined);
 });
