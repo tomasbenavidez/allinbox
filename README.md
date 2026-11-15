@@ -152,6 +152,7 @@ On Windows, use `"command": "cmd"` with `"args": ["/c", "npx", "-y", "allinbox",
 ```text
 allinbox              guided setup (in a terminal) / MCP server (when an agent runs it)
 allinbox add          add one account
+allinbox login <id>   sign in again (Outlook / Microsoft 365 accounts)
 allinbox connect      connect allinbox to your installed agents
 allinbox list         show accounts and draft settings
 allinbox test [id]    check that accounts can log in
@@ -164,7 +165,25 @@ allinbox remove <id>  remove an account and its stored password
 No. allinbox talks IMAP directly from your computer to your provider. What your *agent* does with the text it reads is up to the agent you use.
 
 **Outlook, Hotmail or Microsoft 365?**
-Not yet. Microsoft blocks password logins for these accounts, so they need OAuth, which is next on the [roadmap](ROADMAP.md).
+In progress. Microsoft no longer accepts passwords over IMAP, so these accounts use "Sign in with Microsoft" instead: the setup shows a short code, you type it on Microsoft's own page, and allinbox never sees your password. The code is in the repo and is being tested on real accounts before it ships in a release; see the [roadmap](ROADMAP.md).
+
+Microsoft's consent screen says "read and write access to your mail" because that is the only IMAP permission it offers. allinbox still opens every mailbox read-only, and it never asks for the permission to send. You can revoke access anytime at [account.microsoft.com/privacy/app-access](https://account.microsoft.com/privacy/app-access).
+
+<details>
+<summary>Work or school account blocked by your organization? Use your own app registration</summary>
+
+An administrator can register allinbox in your organization's tenant instead of relying on the shared one:
+
+1. [entra.microsoft.com](https://entra.microsoft.com) → App registrations → New registration. No redirect URI.
+2. Authentication → Allow public client flows → Yes.
+3. Run the setup with the registration's ids. They are saved with the account, so the agent does not need them later:
+
+```bash
+ALLINBOX_MS_CLIENT_ID=<application-client-id> ALLINBOX_MS_TENANT=<tenant-id> npx allinbox add
+```
+
+IMAP must also be enabled for the mailbox in Exchange Online.
+</details>
 
 **Gmail says "The setting you are looking for is not available for your account".**
 Turn on 2-Step Verification first. On school or company Google accounts, your administrator may have disabled app passwords entirely.

@@ -5,13 +5,14 @@ import { argv, exit } from 'node:process';
 import { loadConfig, saveConfig, deletePassword } from './config.js';
 import { searchAccount } from './imap.js';
 import { serveStdio } from './server.js';
-import { onboarding, addAccount, connectAgents, friendlyError, closePrompts } from './onboarding.js';
+import { onboarding, addAccount, connectAgents, friendlyError, closePrompts, microsoftSignIn } from './onboarding.js';
 import { tr } from './i18n.js';
 
 const HELP = `allinbox — all your inboxes, one query, any agent.
 
   allinbox              guided setup (in a terminal) / MCP server (when an agent runs it)
   allinbox add          add one email account
+  allinbox login ID     sign in again (Outlook / Microsoft 365 accounts)
   allinbox connect      connect allinbox to your installed agents
   allinbox list         list configured accounts
   allinbox remove ID    remove an account and its stored password
@@ -31,6 +32,15 @@ async function remove(id?: string): Promise<void> {
   await saveConfig({ ...config, accounts: config.accounts.filter((a) => a.id !== id) });
   deletePassword(id);
   console.log(`Removed ${id}.`);
+}
+
+/** A Microsoft sign-in lapses after long inactivity or a password change: renew it in place. */
+async function login(id?: string): Promise<void> {
+  if (!id) throw new Error('Usage: allinbox login <id>');
+  const account = (await loadConfig()).accounts.find((a) => a.id === id);
+  if (!account) throw new Error(`No account "${id}"`);
+  if (!account.oauth) throw new Error(`"${id}" uses an app password: remove it and add it again to change it.`);
+  if (!(await microsoftSignIn(account))) exit(1);
 }
 
 async function test(id?: string): Promise<void> {
@@ -61,11 +71,13 @@ async function main(): Promise<void> {
       return onboarding();
     case 'add':
       return add();
+    case 'login':
+      return login(arg);
     case 'connect':
       return connectAgents();
     case 'list': {
       const { accounts, drafts } = await loadConfig();
-      console.log(accounts.length ? accounts.map((a) => `${a.id}  ${a.host}:${a.port}`).join('\n') : 'No accounts.');
+      console.log(accounts.length ? accounts.map((a) => `${a.id}  ${a.host}:${a.port}${a.oauth ? '  (Microsoft sign-in)' : ''}`).join('\n') : 'No accounts.');
       console.log(`drafts: ${drafts.enabled ? `on${drafts.allowRecipients.length ? ` (only ${drafts.allowRecipients.join(', ')})` : ''}` : 'off'}`);
       return;
     }

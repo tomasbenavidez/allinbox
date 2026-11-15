@@ -21,6 +21,7 @@ TypeScript (tsc 7) · Node >= 20.12 · `@modelcontextprotocol/sdk` · `imapflow`
 | `src/server.ts` | MCP tools: `list_accounts`, `search_all`, `read_email`, `read_thread`, `create_draft` (only if drafts enabled). |
 | `src/imap.ts` | IMAP: `withClient` (timeouts, error listener), search, read, thread. |
 | `src/drafts.ts` | Draft via IMAP APPEND to `\Drafts`; recipient allowlist. |
+| `src/oauth.ts` | Microsoft sign-in: device-code flow, refresh + in-memory access-token cache. Plain `fetch`, no MSAL. |
 | `src/clean.ts` | Pure: `cleanBody`, `mergeHits` (dedupe by Message-ID), `formatHits`, `normalizeSubject`. |
 | `src/onboarding.ts` | Bilingual guided setup: accounts → drafts opt-in → connect agents. |
 | `src/agents.ts` | Detects agents, writes their MCP configs (backup + atomic write). |
@@ -31,18 +32,24 @@ TypeScript (tsc 7) · Node >= 20.12 · `@modelcontextprotocol/sdk` · `imapflow`
 
 ## Invariants (do not break)
 - **Never able to send.** No SMTP code, ever. Writes = only APPEND to Drafts, opt-in.
+  OAuth requests only the IMAP scope: never `SMTP.Send`, never Graph `Mail.Send`.
 - Mailboxes opened read-only (EXAMINE): never set `\Seen`, never STORE/EXPUNGE/delete.
 - All email-derived text (bodies, subjects, senders, search results) goes inside the per-process
   random `<untrusted_email_NONCE>` wrapper; forged tags are defanged (`wrapUntrusted`).
 - Draft allowlist **fails closed**: empty = nobody, `*` = anyone (explicit).
-- Password stored in keychain only AFTER a successful login test.
+- Password (or OAuth refresh token) stored in keychain only AFTER a successful login test.
 - Non-TLS ports require STARTTLS (localhost exempt). Per-account 30 s hard deadline.
 - Agent configs pin `allinbox@<VERSION>` and pass `serve` explicitly.
 
 ## Key decisions
 - **IMAP + app passwords, not Gmail OAuth**: Google's restricted Gmail scopes need a paid yearly
   security assessment for a shared client; BYO Google Cloud kills the "60-second setup" that
-  makes it shareable. Outlook personal blocks app passwords → planned device-code OAuth (v0.5).
+  makes it shareable.
+- **Microsoft = OAuth device code + IMAP XOAUTH2** (Microsoft rejects passwords over IMAP). Accounts
+  carry `oauth: { provider, clientId, tenant }` in config; the keychain entry holds the refresh token
+  (chunked: Windows caps an entry at 1280 chars). Tenant `consumers` for outlook/hotmail/live,
+  `organizations` for Microsoft 365 (MX). `ALLINBOX_MS_CLIENT_ID` / `ALLINBOX_MS_TENANT` override at
+  `add` time and are saved on the account. `allinbox login <id>` renews an expired sign-in.
 - Gmail searches `\All` with `gmraw` (`newer_than:Nd`); other providers search INBOX.
 - Thread on Gmail = `X-GM-THRID`; elsewhere a bounded same-subject heuristic (marked `ponytail:`).
 - Onboarding uses one readline with its own line queue (piped/pasted lines must not vanish) and a
@@ -83,6 +90,11 @@ CI DONE (`.github/workflows/ci.yml`): ubuntu node 20+22 run all 19 tests incl. G
 Demo media lives in `docs/media/` (GIF for the README, MP4 for posts); source composition is not in the repo.
 Public-repo hygiene: never commit real email addresses, account names or local paths (tests use
 fictional domains). Commits are authored with the GitHub noreply address.
+
+Microsoft OAuth (branch work, 2026-11-15): code + tests done, NOT yet tested on a real account.
+Blocked on `DEFAULT_CLIENT_ID` in `src/oauth.ts` being empty: the maintainer must register the app in
+Microsoft Entra first. GreenMail has no XOAUTH2, so `test/oauth.test.ts` uses a fake IMAP server.
+See ROADMAP.md "v0.5" for what is left and what to confirm in the real test.
 
 ## Next steps, in order
 1. **npm publish** from CI with `--provenance`; fill `repository`, `author`, `keywords`, `homepage`;

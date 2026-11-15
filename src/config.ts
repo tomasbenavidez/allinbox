@@ -11,6 +11,15 @@ const AccountSchema = z.object({
   port: z.number().int().positive(),
   secure: z.boolean(),
   user: z.string().min(1),
+  // Absent = app password. Present = sign in with Microsoft; the keychain then holds a refresh token.
+  // Both values end up in a URL / form body, hence the strict shapes.
+  oauth: z
+    .object({
+      provider: z.literal('microsoft'),
+      clientId: z.string().regex(/^[0-9a-f-]{36}$/i),
+      tenant: z.string().regex(/^[a-z0-9.-]+$/i),
+    })
+    .optional(),
 });
 export type Account = z.infer<typeof AccountSchema>;
 
@@ -57,15 +66,55 @@ export async function saveConfig(config: Config): Promise<void> {
 export const passwordEnvVar = (id: string): string =>
   `ALLINBOX_PASS_${id.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`;
 
+/** Where secrets live. The OS keychain in real use; tests pass a Map-backed one. */
+export interface SecretStore {
+  get(key: string): string | null;
+  set(key: string, value: string): void;
+  delete(key: string): boolean;
+}
+const keychain: SecretStore = {
+  get: (key) => new Entry(KEYRING_SERVICE, key).getPassword(),
+  set: (key, value) => new Entry(KEYRING_SERVICE, key).setPassword(value),
+  delete: (key) => new Entry(KEYRING_SERVICE, key).deletePassword(),
+};
+
+// Windows Credential Manager caps one entry at 2560 bytes (1280 UTF-16 chars) and Microsoft refresh
+// tokens can be longer, so long secrets spill into "<id>#1", "<id>#2", ... App passwords fit in one.
+const CHUNK = 1000;
+const chunkKey = (id: string, i: number): string => (i ? `${id}#${i}` : id);
+
+export function readSecret(id: string, store: SecretStore = keychain): string | null {
+  let secret = '';
+  for (let i = 0; ; i++) {
+    const part = store.get(chunkKey(id, i));
+    if (!part) break;
+    secret += part;
+    if (part.length < CHUNK) break; // a short chunk is the last one: no extra lookup for passwords
+  }
+  return secret || null;
+}
+
+export function writeSecret(id: string, secret: string, store: SecretStore = keychain): void {
+  const parts = Math.max(1, Math.ceil(secret.length / CHUNK));
+  for (let i = 0; i < parts; i++) store.set(chunkKey(id, i), secret.slice(i * CHUNK, (i + 1) * CHUNK));
+  for (let i = parts; store.delete(chunkKey(id, i)); i++); // a shorter secret must not keep an old tail
+}
+
+export function clearSecret(id: string, store: SecretStore = keychain): boolean {
+  let removed = false;
+  for (let i = 0; store.delete(chunkKey(id, i)); i++) removed = true;
+  return removed;
+}
+
+/** The account's secret: an app password, or a refresh token for OAuth accounts. */
 export function getPassword(id: string): string {
   const fromEnv = process.env[passwordEnvVar(id)];
   if (fromEnv) return fromEnv;
-  const stored = new Entry(KEYRING_SERVICE, id).getPassword();
+  const stored = readSecret(id);
   if (!stored) throw new Error(`No password stored for "${id}". Run: npx allinbox`);
   return stored;
 }
 
-export const setPassword = (id: string, password: string): void =>
-  new Entry(KEYRING_SERVICE, id).setPassword(password);
+export const setPassword = (id: string, password: string): void => writeSecret(id, password);
 
-export const deletePassword = (id: string): boolean => new Entry(KEYRING_SERVICE, id).deletePassword();
+export const deletePassword = (id: string): boolean => clearSecret(id);

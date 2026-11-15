@@ -2,6 +2,7 @@ import { ImapFlow, type MessageAddressObject } from 'imapflow';
 import { simpleParser, type AddressObject } from 'mailparser';
 import { convert as htmlToText } from 'html-to-text';
 import { getPassword, type Account } from './config.js';
+import { accessToken } from './oauth.js';
 import { isGmailHost } from './providers.js';
 import { cleanBody, mergeHits, normalizeSubject, pickBody, type Hit } from './clean.js';
 
@@ -20,8 +21,14 @@ const isoDate = (d: Date | string | undefined): string => {
 
 const isLocalHost = (host: string) => host === '127.0.0.1' || host === 'localhost' || host === '::1';
 
-/** `pass` overrides the keychain: onboarding tests a password before storing it. */
-export async function withClient<T>(account: Account, fn: (c: ImapFlow) => Promise<T>, pass?: string): Promise<T> {
+/**
+ * `secret` overrides the keychain: onboarding tests a credential before storing it.
+ * It is a password, or an access token for OAuth accounts.
+ */
+export async function withClient<T>(account: Account, fn: (c: ImapFlow) => Promise<T>, secret?: string): Promise<T> {
+  const auth = account.oauth
+    ? { user: account.user, accessToken: secret ?? (await accessToken(account)) } // XOAUTH2
+    : { user: account.user, pass: secret ?? getPassword(account.id) };
   const client = new ImapFlow({
     host: account.host,
     port: account.port,
@@ -29,7 +36,7 @@ export async function withClient<T>(account: Account, fn: (c: ImapFlow) => Promi
     // Non-TLS ports must upgrade with STARTTLS or fail: never send a password in clear over the network.
     // Localhost is exempt (Proton Bridge, test servers).
     ...(account.secure || isLocalHost(account.host) ? {} : { doSTARTTLS: true }),
-    auth: { user: account.user, pass: pass ?? getPassword(account.id) },
+    auth,
     logger: false,
     connectionTimeout: 15_000,
     socketTimeout: 20_000,
@@ -81,7 +88,7 @@ export interface SearchOptions {
   limit: number;
 }
 
-export async function searchAccount(account: Account, opts: SearchOptions, pass?: string): Promise<Hit[]> {
+export async function searchAccount(account: Account, opts: SearchOptions, secret?: string): Promise<Hit[]> {
   return withClient(account, (c) =>
     inSearchable(c, async () => {
       const criteria = isGmailHost(account.host)
@@ -103,7 +110,7 @@ export async function searchAccount(account: Account, opts: SearchOptions, pass?
       }
       return hits;
     }),
-    pass,
+    secret,
   );
 }
 

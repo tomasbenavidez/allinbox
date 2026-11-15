@@ -10,6 +10,8 @@ export interface Preset {
   twoStep?: { url: string; symptom: L };
   /** Builds a URL that opens the page signed in as `email` (users often have several accounts). */
   forAccount?: (url: string, email: string) => string;
+  /** Sign in with Microsoft instead of a password. `tenant` = which kind of Microsoft account. */
+  oauth?: { provider: 'microsoft'; tenant: 'consumers' | 'organizations' };
   warning?: L;
 }
 
@@ -59,9 +61,16 @@ const outlook: Preset = {
   label: 'Outlook',
   host: 'outlook.office365.com',
   port: 993,
+  // Microsoft turned off password logins over IMAP: these accounts sign in with OAuth (see oauth.ts).
+  oauth: { provider: 'microsoft', tenant: 'consumers' },
+};
+const microsoft365: Preset = {
+  ...outlook,
+  label: 'Microsoft 365',
+  oauth: { provider: 'microsoft', tenant: 'organizations' },
   warning: {
-    en: 'Microsoft blocks password login for most personal Outlook/Hotmail accounts. It may fail; OAuth support is planned.',
-    es: 'Microsoft bloquea el login con contraseña en la mayoría de las cuentas personales de Outlook/Hotmail. Puede fallar; el soporte OAuth está planeado.',
+    en: 'Work and school accounts: your organization may have IMAP turned off or require an admin to approve allinbox.',
+    es: 'Cuentas de trabajo o estudio: tu organización puede tener IMAP apagado o exigir que un administrador apruebe allinbox.',
   },
 };
 
@@ -76,6 +85,12 @@ const PRESETS: Record<string, Preset> = {
   'outlook.com': outlook,
   'hotmail.com': outlook,
   'live.com': outlook,
+  'msn.com': outlook,
+  'outlook.es': outlook,
+  'hotmail.es': outlook,
+  'outlook.com.ar': outlook,
+  'hotmail.com.ar': outlook,
+  'live.com.ar': outlook,
   'aol.com': { label: 'AOL', host: 'imap.aol.com', port: 993 },
   'fastmail.com': { label: 'Fastmail', host: 'imap.fastmail.com', port: 993 },
   'zoho.com': { label: 'Zoho', host: 'imap.zoho.com', port: 993 },
@@ -102,6 +117,6 @@ export function presetForMx(exchanges: string[]): Preset | undefined {
   if (mx.some((e) => e.endsWith('.google.com') || e.endsWith('.googlemail.com'))) {
     return { ...gmail, label: 'Google Workspace' };
   }
-  if (mx.some((e) => e.endsWith('.protection.outlook.com'))) return { ...outlook, label: 'Microsoft 365' };
+  if (mx.some((e) => e.endsWith('.protection.outlook.com'))) return microsoft365;
   return undefined;
 }

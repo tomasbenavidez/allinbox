@@ -9,6 +9,7 @@ import { loadConfig, saveConfig, setPassword, type Account, type Config } from '
 import { resolveMx } from 'node:dns/promises';
 import { presetFor, presetForMx, type Preset } from './providers.js';
 import { searchAccount } from './imap.js';
+import { OAuthError, forgetAccessToken, msClientId, msTenant, pollDeviceLogin, startDeviceLogin } from './oauth.js';
 import { AGENTS, type InstallResult } from './agents.js';
 import { tr, isYes, type L } from './i18n.js';
 
@@ -83,10 +84,34 @@ function openUrl(url: string): void {
 }
 
 /** Turn IMAP/network errors into something a non-developer can act on. */
-export function friendlyError(e: unknown, account: Pick<Account, 'host' | 'port'>): L {
+export function friendlyError(e: unknown, account: Pick<Account, 'host' | 'port'> & Partial<Pick<Account, 'email' | 'oauth'>>): L {
+  if (e instanceof OAuthError) {
+    if (e.code === 'authorization_declined') {
+      return { en: 'The Microsoft sign-in was cancelled.', es: 'Se canceló el inicio de sesión de Microsoft.' };
+    }
+    if (e.code === 'expired_token') {
+      return { en: 'The code expired before the sign-in finished.', es: 'El código venció antes de terminar el inicio de sesión.' };
+    }
+    if (e.code === 'invalid_grant') {
+      return {
+        en: `The Microsoft sign-in expired or was revoked. Run "npx allinbox login ${account.email ?? '<email>'}".`,
+        es: `El inicio de sesión de Microsoft venció o fue revocado. Corré "npx allinbox login ${account.email ?? '<email>'}".`,
+      };
+    }
+    return { en: `Microsoft refused the sign-in: ${e.message}`, es: `Microsoft rechazó el inicio de sesión: ${e.message}` };
+  }
   const err = e as { authenticationFailed?: boolean; code?: string; responseText?: string; message?: string };
   const text = `${err.responseText ?? ''} ${err.message ?? ''}`;
-  if (err.authenticationFailed || /AUTHENTICATIONFAILED|Invalid credentials|LOGIN failed/i.test(text)) {
+  const authFailed = err.authenticationFailed || /AUTHENTICATIONFAILED|Invalid credentials|LOGIN failed|AUTHENTICATE failed/i.test(text);
+  if (authFailed && account.oauth) {
+    // The sign-in itself worked (we hold a token); it is the mailbox that said no.
+    const who = account.email ?? '';
+    return {
+      en: `Microsoft signed you in, but the mailbox refused IMAP. Check that you signed in as ${who} (not another Microsoft account or an alias) and that IMAP is on: outlook.com > Settings > Mail > Forwarding and IMAP.`,
+      es: `Microsoft te dejó entrar, pero la casilla rechazó IMAP. Fijate que hayas entrado como ${who} (no con otra cuenta de Microsoft ni un alias) y que IMAP esté activado: outlook.com > Configuración > Correo > Reenvío e IMAP.`,
+    };
+  }
+  if (authFailed) {
     return {
       en: 'The password did not work. Make sure it is an APP password, not your normal one.',
       es: 'La contraseña no funcionó. Fijate que sea una contraseña DE APLICACIÓN, no la normal.',
@@ -152,6 +177,50 @@ async function guideAppPassword(preset: Preset, email: string): Promise<void> {
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const MAX_TRIES = 3;
 
+/**
+ * Microsoft accounts: the user signs in on Microsoft's own page and types a short code; allinbox
+ * never sees the password. Also used by `allinbox login` when a sign-in expires.
+ */
+export async function microsoftSignIn(account: Account): Promise<boolean> {
+  const oauth = account.oauth;
+  if (!oauth) throw new Error(`${account.id} does not use Microsoft sign-in`);
+  console.log(`\n${bold(tr({ en: 'Sign in with Microsoft', es: 'Iniciá sesión con Microsoft' }))}`);
+  console.log(dim(tr({
+    en: 'You sign in on Microsoft\'s page; allinbox never sees your password. You can revoke it anytime at https://account.microsoft.com/privacy/app-access',
+    es: 'Entrás en la página de Microsoft; allinbox nunca ve tu contraseña. Lo podés revocar cuando quieras en https://account.microsoft.com/privacy/app-access',
+  })));
+  // The IMAP permission is all-or-nothing on Microsoft's side; say so before their consent screen does.
+  console.log(dim(tr({
+    en: 'Microsoft will ask for "read and write access to your mail": it is the only IMAP permission it offers. allinbox opens every mailbox read-only and has no permission to send.',
+    es: 'Microsoft va a pedir "acceso de lectura y escritura a tu correo": es el único permiso IMAP que ofrece. allinbox abre todo en solo lectura y no tiene permiso para enviar.',
+  })));
+
+  for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+    try {
+      const device = await startDeviceLogin(oauth);
+      openUrl(device.verification_uri);
+      say({ en: '\nI opened this page in your browser:', es: '\nTe abrí esta página en el navegador:' });
+      console.log(`  ${styleText('cyan', device.verification_uri)}`);
+      console.log(`  ${tr({ en: 'Type this code there:', es: 'Escribí ahí este código:' })} ${bold(device.user_code)}`);
+      console.log(dim(`  ${tr({ en: `Then sign in as ${account.email}.`, es: `Después entrá como ${account.email}.` })}`));
+      stdout.write(dim(tr({ en: 'Waiting for you to finish in the browser... ', es: 'Esperando a que termines en el navegador... ' })));
+      const tokens = await pollDeviceLogin(oauth, device);
+      // Test first, store after: a failed retry must never overwrite a working sign-in.
+      await searchAccount(account, { sinceDays: 1, limit: 1 }, tokens.access_token);
+      setPassword(account.id, tokens.refresh_token);
+      forgetAccessToken(account.id);
+      console.log('');
+      ok(tr({ en: `${account.email} connected.`, es: `${account.email} conectada.` }));
+      return true;
+    } catch (e) {
+      console.log('');
+      warn(tr(friendlyError(e, account)));
+      if (attempt === MAX_TRIES || !(await confirm({ en: 'Try again?', es: '¿Probamos de nuevo?' }, true))) break;
+    }
+  }
+  return false;
+}
+
 /** One account, start to finish. Returns null if the user gave up. */
 export async function addAccount(existing: Account[]): Promise<Account | null> {
   let email = '';
@@ -179,6 +248,22 @@ export async function addAccount(existing: Account[]): Promise<Account | null> {
       port = Number((await ask('  Port [993]: ')) || 993);
       if (Number.isNaN(port)) warn(tr({ en: 'Port must be a number (usually 993).', es: 'El puerto es un número (casi siempre 993).' }));
     }
+  }
+
+  if (preset?.oauth) {
+    const clientId = msClientId();
+    if (!clientId) {
+      warn(tr({
+        en: 'Microsoft sign-in is not set up in this build. Set ALLINBOX_MS_CLIENT_ID to your app registration id (see README).',
+        es: 'El inicio de sesión de Microsoft no está configurado en esta versión. Definí ALLINBOX_MS_CLIENT_ID con el id de tu registro de app (ver README).',
+      }));
+      return null;
+    }
+    const oauth = { provider: preset.oauth.provider, clientId, tenant: msTenant(preset.oauth.tenant) };
+    const msAccount: Account = { id: email, email, host, port, secure: true, user: email, oauth };
+    if (await microsoftSignIn(msAccount)) return msAccount;
+    warn(tr({ en: `Skipped ${email}. Run "npx allinbox add" to retry.`, es: `Salteé ${email}. Corré "npx allinbox add" para reintentar.` }));
+    return null;
   }
 
   if (preset?.appPassword) await guideAppPassword(preset, email);
