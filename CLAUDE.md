@@ -28,6 +28,7 @@ TypeScript (tsc 7) · Node >= 20.12 · `@modelcontextprotocol/sdk` · `imapflow`
 | `src/providers.ts` | IMAP presets + app-password URLs per provider. |
 | `src/i18n.ts` | en/es inline (`ALLINBOX_LANG`). |
 | `src/version.ts` | Must equal package.json version (a test enforces it). |
+| `src/demo.ts` | `allinbox demo`: same `createServer` over streamable HTTP (stateful sessions) with a fake in-memory `MailBackend`. Never reads config/keychain/IMAP. `scripts/demo-smoke.mjs` + `.github/workflows/demo-smoke.yml` test it end to end. |
 | `src/ui.ts` + `ui/` | MCP Apps views (`ui://allinbox/search.html`, `draft.html`): vanilla HTML, `bridge.js` + `base.css` inlined at read time. View data goes in result `_meta["allinbox/ui"]`, never in model-visible text. |
 
 ## Invariants (do not break)

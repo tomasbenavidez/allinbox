@@ -52,8 +52,17 @@ function parseId(config: Config, id: string): { account: Account; uid: number } 
   return { account, uid: Number(id.slice(sep + 1)) };
 }
 
+/** Where mail comes from. IMAP in real use; `allinbox demo` swaps in fake in-memory inboxes (src/demo.ts). */
+export interface MailBackend {
+  searchAll: typeof searchAll;
+  readMessage: typeof readMessage;
+  readThread: typeof readThread;
+  createDraft: typeof createDraft;
+}
+const imapBackend: MailBackend = { searchAll, readMessage, readThread, createDraft };
+
 /** Config is read once at startup: changing it (e.g. enabling drafts) needs an agent restart. */
-export async function createServer(config: Config): Promise<McpServer> {
+export async function createServer(config: Config, mail: MailBackend = imapBackend): Promise<McpServer> {
   const server = new McpServer(
     { name: 'allinbox', version: VERSION },
     { instructions: instructions(config.drafts.enabled) },
@@ -91,7 +100,7 @@ export async function createServer(config: Config): Promise<McpServer> {
     async ({ query, since_days, limit, accounts }) => {
       try {
         const searched = pickAccounts(config, accounts);
-        const { hits, errors } = await searchAll(searched, { query, sinceDays: since_days, limit });
+        const { hits, errors } = await mail.searchAll(searched, { query, sinceDays: since_days, limit });
         const failures = errors.map((e) => `! ${e.account} failed: ${e.error}`).join('\n');
         return {
           ...text(wrapUntrusted('kind="search_results"', formatHits(hits)) + (failures ? `\n${failures}` : '')),
@@ -123,7 +132,7 @@ export async function createServer(config: Config): Promise<McpServer> {
     async ({ id, max_chars }) => {
       try {
         const { account, uid } = parseId(config, id);
-        return untrusted(id, await readMessage(account, uid, max_chars));
+        return untrusted(id, await mail.readMessage(account, uid, max_chars));
       } catch (e) {
         return fail(errMsg(e));
       }
@@ -142,7 +151,7 @@ export async function createServer(config: Config): Promise<McpServer> {
     async ({ id, max_chars }) => {
       try {
         const { account, uid } = parseId(config, id);
-        return untrusted(id, await readThread(account, uid, max_chars));
+        return untrusted(id, await mail.readThread(account, uid, max_chars));
       } catch (e) {
         return fail(errMsg(e));
       }
@@ -191,7 +200,7 @@ export async function createServer(config: Config): Promise<McpServer> {
     const save = async (args: DraftArgs) => {
       const { acc, replyToUid } = resolveDraft(args);
       const { to, cc, subject, body } = args;
-      return createDraft(acc, { to, cc, subject, body, replyToUid }, allow);
+      return mail.createDraft(acc, { to, cc, subject, body, replyToUid }, allow);
     };
 
     server.registerTool(

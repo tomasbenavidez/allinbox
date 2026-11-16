@@ -1,0 +1,33 @@
+name: Demo smoke
+
+# `allinbox demo` end to end with the real MCP client: a UI host and a text-only host.
+on:
+  push:
+    branches: ['demo/**', 'feat/mcp-apps-**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: node --import tsx --test test/ui.test.ts
+
+      - name: Smoke (capability negotiated, as with real hosts)
+        run: |
+          ALLINBOX_UI=auto PORT=3333 node dist/cli.js demo 2> demo.log &
+          for i in $(seq 1 30); do curl -sf localhost:3333/health && break; sleep 0.5; done
+          SMOKE_AUTO=1 node scripts/demo-smoke.mjs http://localhost:3333/mcp
+          echo '--- server log'; cat demo.log

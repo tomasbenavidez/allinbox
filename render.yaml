@@ -1,0 +1,14 @@
+# One-click public host for `allinbox demo` (fake inboxes only, no real mail).
+# Render: New > Blueprint > this repo/branch. Then add https://<service>.onrender.com/mcp
+# as a custom connector in Claude.
+services:
+  - type: web
+    name: allinbox-demo
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    startCommand: node dist/cli.js demo
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

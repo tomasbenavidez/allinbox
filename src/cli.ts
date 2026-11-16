@@ -5,6 +5,7 @@ import { argv, exit } from 'node:process';
 import { loadConfig, saveConfig, deletePassword } from './config.js';
 import { searchAccount } from './imap.js';
 import { serveStdio } from './server.js';
+import { serveDemo } from './demo.js';
 import { onboarding, addAccount, connectAgents, friendlyError, closePrompts } from './onboarding.js';
 import { tr } from './i18n.js';
 
@@ -16,7 +17,8 @@ const HELP = `allinbox — all your inboxes, one query, any agent.
   allinbox list         list configured accounts
   allinbox remove ID    remove an account and its stored password
   allinbox test [ID]    check that accounts can connect
-  allinbox serve        force MCP server mode (stdio)`;
+  allinbox serve        force MCP server mode (stdio)
+  allinbox demo         try it with fake inboxes: MCP over HTTP on $PORT (default 3333), path /mcp`;
 
 async function add(): Promise<void> {
   const config = await loadConfig();
@@ -57,6 +59,8 @@ async function main(): Promise<void> {
       return process.stdin.isTTY ? onboarding() : serveStdio();
     case 'serve':
       return serveStdio();
+    case 'demo':
+      return serveDemo();
     case 'setup':
       return onboarding();
     case 'add':

@@ -110,6 +110,20 @@ The cards are plain HTML inlined into the server (no framework, no CDN), load no
 (empty CSP, so no tracking pixels) and render email text as text, never as HTML.
 `pnpm preview:ui` writes `docs/ui-preview.html`, both cards in a mock host with sample mail.
 
+## Try it without an email account
+
+`allinbox demo` runs the same server with four fake inboxes (a university, a job, a personal address and a dead
+old one) over MCP streamable HTTP at `/mcp`. Nothing touches your config, keychain or any real mailbox.
+
+```bash
+pnpm build && node dist/cli.js demo          # http://localhost:3333/mcp
+npx cloudflared tunnel --url http://localhost:3333   # public https URL, for claude.ai
+```
+
+In Claude: **Customize → Connectors → Add custom connector**, paste `https://<your-url>/mcp`, then ask
+*"What do I have pending this week across all my email?"* or *"Reply to Martin that Tuesday works"*.
+`render.yaml` deploys the same demo to Render's free tier if you want a permanent URL.
+
 ## Security
 
 Giving an AI access to your email deserves a straight answer:
