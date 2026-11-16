@@ -10,6 +10,7 @@ Status of the gaps allinbox exists to close:
 | Proof of the token savings | ⏳ v0.3 benchmark |
 | Search by meaning across years of mail | ⏳ v0.4 local index |
 | Outlook / Hotmail personal accounts | ⏳ v0.5 OAuth |
+| Visual cards: unified inbox + draft review (MCP Apps) | 🧪 prototype `feat/mcp-apps-ui` |
 | claude.ai web + mobile | 🔬 research |
 
 ## v0.3: benchmark (the number for the launch post)

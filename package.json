@@ -31,6 +31,7 @@
     "test": "node --import tsx --test test/*.test.ts",
     "build": "tsc",
     "dev": "tsx src/cli.ts",
+    "preview:ui": "tsx scripts/preview-ui.mjs",
     "prepublishOnly": "pnpm run build && pnpm test"
   },
   "license": "MIT",
@@ -42,7 +43,8 @@
     "node": ">=20.12"
   },
   "files": [
-    "dist"
+    "dist",
+    "ui"
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

@@ -1,0 +1,46 @@
+/* Shared by every view. Host variables (MCP Apps hostContext.styles) win; these are fallbacks. */
+:root {
+  --bg: var(--color-background-primary, #ffffff);
+  --bg-soft: var(--color-background-secondary, #f6f6f4);
+  --text: var(--color-text-primary, #1f1e1d);
+  --muted: var(--color-text-secondary, #6b6a66);
+  --border: var(--color-border-primary, #e4e2dc);
+  --accent: #3b6fd8;
+  --danger: #c2412d;
+  --ok: #2e7d4f;
+  --radius: var(--border-radius-md, 10px);
+  --font: var(--font-sans, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif);
+  color-scheme: light dark;
+}
+:root[data-theme='dark'] {
+  --bg: var(--color-background-primary, #262624);
+  --bg-soft: var(--color-background-secondary, #30302e);
+  --text: var(--color-text-primary, #f2f1ed);
+  --muted: var(--color-text-secondary, #a6a49d);
+  --border: var(--color-border-primary, #3d3d3a);
+  --accent: #7ea4f0;
+  --danger: #f08a77;
+  --ok: #7ccf9d;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: transparent; }
+body { display: flow-root; }
+body { font: 14px/1.45 var(--font); color: var(--text); }
+.card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.head { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px 8px; flex-wrap: wrap; }
+.title { font-weight: 600; font-size: 15px; }
+.sub { color: var(--muted); font-size: 12.5px; }
+.muted { color: var(--muted); }
+button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); padding: 6px 12px; }
+button:hover:not(:disabled) { background: var(--bg-soft); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover:not(:disabled) { filter: brightness(1.05); background: var(--accent); }
+.banner { margin: 0 14px 10px; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+.banner.ok { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+.footnote { padding: 8px 14px 12px; color: var(--muted); font-size: 12px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; border-radius: 999px; padding: 2px 9px; border: 1px solid var(--border); white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -2px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.skeleton { padding: 18px 14px; color: var(--muted); }

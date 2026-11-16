@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>allinbox · draft review</title>
+<style>
+/* allinbox:base */
+.badge { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; padding: 1px 7px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.badge.saved { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
+.badge.gone { background: var(--bg-soft); color: var(--muted); }
+form { border-top: 1px solid var(--border); }
+.field { display: grid; grid-template-columns: 64px 1fr; align-items: start; gap: 8px; padding: 7px 14px; border-bottom: 1px solid var(--border); }
+.field label { color: var(--muted); font-size: 12.5px; padding-top: 5px; }
+.field .static { padding-top: 4px; overflow-wrap: anywhere; }
+input, textarea { width: 100%; font: inherit; color: var(--text); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 4px 6px; outline: none; }
+input:focus, textarea:focus { border-color: var(--accent); background: var(--bg); }
+input:disabled, textarea:disabled { color: var(--text); }
+textarea { resize: none; min-height: 120px; line-height: 1.5; }
+.bodywrap { padding: 8px 14px; border-bottom: 1px solid var(--border); }
+.warn { grid-column: 2; font-size: 12px; color: var(--danger); margin-top: -2px; }
+.actions { display: flex; gap: 8px; padding: 10px 14px 4px; align-items: center; flex-wrap: wrap; }
+.actions .grow { flex: 1; }
+</style>
+</head>
+<body>
+<div class="card" id="app"><div class="skeleton"><span class="spinner"></span> <span id="loading">Preparing the draft…</span></div></div>
+<!-- allinbox:bridge -->
+<script>
+const t = (en, es) => (bridge.es() ? es : en);
+const app = document.getElementById('app');
+const state = { draft: null, status: 'editing', error: '', folder: '' };
+
+const el = (tag, props = {}, ...children) => {
+  const node = Object.assign(document.createElement(tag), props);
+  for (const c of children) if (c != null) node.append(c);
+  return node;
+};
+const splitList = (s) => s.split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+
+/** Mirror of drafts.ts blockedRecipients, only for instant feedback. The server re-checks on save. */
+function blocked(recipients, allow) {
+  const rules = (allow ?? []).map((r) => r.trim().toLowerCase());
+  if (rules.includes('*')) return [];
+  return recipients.filter((raw) => {
+    const r = raw.toLowerCase();
+    return !rules.some((rule) => (rule.startsWith('@') ? r.endsWith(rule) : r === rule));
+  });
+}
+
+function fromResult(result, args) {
+  const ui = result?._meta?.['allinbox/ui'] ?? {};
+  return {
+    mode: ui.mode ?? 'saved',
+    account: ui.account ?? args.account,
+    from: ui.from ?? '',
+    to: ui.to ?? args.to ?? [],
+    cc: ui.cc ?? args.cc ?? [],
+    subject: ui.subject ?? args.subject ?? '',
+    body: ui.body ?? args.body ?? '',
+    replyToId: ui.replyToId ?? args.reply_to_id,
+    allow: ui.allow ?? ['*'],
+    folder: ui.folder ?? '',
+  };
+}
+
+function badge() {
+  const map = {
+    editing: ['', t('Not saved yet', 'Sin guardar')],
+    saving: ['', t('Saving…', 'Guardando…')],
+    saved: ['saved', t('In Drafts · not sent', 'En Borradores · no enviado')],
+    discarded: ['gone', t('Discarded', 'Descartado')],
+  };
+  const [cls, label] = map[state.status];
+  return el('span', { className: 'badge ' + cls, textContent: label });
+}
+
+function render() {
+  const d = state.draft;
+  const locked = state.status !== 'editing';
+  let saveBtn = null;
+  app.replaceChildren(
+    el('div', { className: 'head' },
+      el('span', { className: 'title', textContent: d.replyToId ? t('Reply draft', 'Borrador de respuesta') : t('New draft', 'Borrador nuevo') }),
+      badge(),
+    ),
+  );
+
+  const form = el('form');
+  form.onsubmit = (e) => e.preventDefault();
+  form.append(el('div', { className: 'field' }, el('label', { textContent: t('From', 'De') }), el('div', { className: 'static', textContent: d.from ? `${d.from} (${d.account})` : d.account })));
+
+  const recipientField = (key, label) => {
+    const input = el('input', { value: d[key].join(', '), disabled: locked, placeholder: key === 'cc' ? t('optional', 'opcional') : '' });
+    const warn = el('div', { className: 'warn' });
+    const check = () => {
+      d[key] = splitList(input.value);
+      const bad = blocked(d[key], d.allow);
+      warn.textContent = bad.length ? t(`Not in your allowed recipients: ${bad.join(', ')}`, `Fuera de tus destinatarios permitidos: ${bad.join(', ')}`) : '';
+      saveBtn && (saveBtn.disabled = !canSave());
+    };
+    input.oninput = check;
+    queueMicrotask(check);
+    return el('div', { className: 'field' }, el('label', { textContent: label }), el('div', {}, input, warn));
+  };
+  form.append(recipientField('to', t('To', 'Para')));
+  if (d.cc.length || !locked) form.append(recipientField('cc', 'Cc'));
+
+  const subject = el('input', {
+    value: d.subject,
+    disabled: locked,
+    placeholder: d.replyToId ? t('Re: original subject', 'Re: asunto original') : '',
+    oninput: () => { d.subject = subject.value; saveBtn && (saveBtn.disabled = !canSave()); },
+  });
+  form.append(el('div', { className: 'field' }, el('label', { textContent: t('Subject', 'Asunto') }), subject));
+
+  const body = el('textarea', { value: d.body, disabled: locked });
+  const grow = () => { body.style.height = 'auto'; body.style.height = body.scrollHeight + 2 + 'px'; };
+  body.oninput = () => { d.body = body.value; grow(); saveBtn && (saveBtn.disabled = !canSave()); };
+  form.append(el('div', { className: 'bodywrap' }, body));
+  app.append(form);
+  requestAnimationFrame(grow);
+
+  if (state.error) app.append(el('div', { className: 'banner', style: 'margin-top:10px', textContent: state.error }));
+
+  if (state.status === 'editing' || state.status === 'saving') {
+    saveBtn = el('button', { className: 'primary', textContent: state.status === 'saving' ? t('Saving…', 'Guardando…') : t('Save to Drafts', 'Guardar en Borradores'), onclick: save });
+    saveBtn.disabled = state.status === 'saving' || !canSave();
+    app.append(el('div', { className: 'actions' },
+      saveBtn,
+      el('button', { textContent: t('Discard', 'Descartar'), disabled: state.status === 'saving', onclick: discard }),
+      el('span', { className: 'grow' }),
+    ));
+  }
+  if (state.status === 'saved') {
+    app.append(el('div', { className: 'banner ok', style: 'margin-top:10px', textContent: t(`Saved in “${state.folder}” of ${d.account}. Open your mail app to review and send it.`, `Guardado en “${state.folder}” de ${d.account}. Abrí tu app de mail para revisarlo y enviarlo.`) }));
+  }
+  app.append(el('div', { className: 'footnote', textContent: t('allinbox never sends email. Saving only puts this draft in your Drafts folder.', 'allinbox nunca envía mails. Guardar solo deja este borrador en tu carpeta Borradores.') }));
+}
+
+const canSave = () => {
+  const d = state.draft;
+  return d.to.length > 0 && d.body.trim().length > 0 && (d.subject.trim() || d.replyToId) && !blocked([...d.to, ...d.cc], d.allow).length;
+};
+
+async function save() {
+  const d = state.draft;
+  state.status = 'saving';
+  state.error = '';
+  render();
+  try {
+    const result = await bridge.callTool('save_draft', {
+      account: d.account,
+      to: d.to,
+      ...(d.cc.length ? { cc: d.cc } : {}),
+      ...(d.subject.trim() ? { subject: d.subject.trim() } : {}),
+      body: d.body,
+      ...(d.replyToId ? { reply_to_id: d.replyToId } : {}),
+    });
+    state.status = 'saved';
+    state.folder = result?._meta?.['allinbox/ui']?.folder ?? 'Drafts';
+    render();
+    bridge.updateModelContext(`The user reviewed the draft to ${d.to.join(', ')} and saved it in the Drafts folder of ${d.account}. It was NOT sent.`).catch(() => {});
+  } catch (e) {
+    state.status = 'editing';
+    state.error = String(e.message ?? e);
+    render();
+  }
+}
+
+function discard() {
+  state.status = 'discarded';
+  render();
+  bridge.updateModelContext('The user discarded the proposed draft. Nothing was saved.').catch(() => {});
+}
+
+let args = {};
+bridge.on('ui/notifications/tool-input', (p) => { args = p.arguments ?? {}; });
+bridge.on('ui/notifications/tool-result', (result) => {
+  if (result.isError) {
+    app.replaceChildren(el('div', { className: 'banner', style: 'margin:12px', textContent: bridge.textOf(result) }));
+    return;
+  }
+  state.draft = fromResult(result, args);
+  if (state.draft.mode === 'saved') {
+    state.status = 'saved';
+    state.folder = state.draft.folder || 'Drafts';
+  }
+  render();
+});
+
+bridge.connect('allinbox-draft').then(() => {
+  document.getElementById('loading').textContent = t('Preparing the draft…', 'Preparando el borrador…');
+});
+</script>
+</body>
+</html>

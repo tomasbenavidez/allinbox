@@ -28,6 +28,7 @@ TypeScript (tsc 7) · Node >= 20.12 · `@modelcontextprotocol/sdk` · `imapflow`
 | `src/providers.ts` | IMAP presets + app-password URLs per provider. |
 | `src/i18n.ts` | en/es inline (`ALLINBOX_LANG`). |
 | `src/version.ts` | Must equal package.json version (a test enforces it). |
+| `src/ui.ts` + `ui/` | MCP Apps views (`ui://allinbox/search.html`, `draft.html`): vanilla HTML, `bridge.js` + `base.css` inlined at read time. View data goes in result `_meta["allinbox/ui"]`, never in model-visible text. |
 
 ## Invariants (do not break)
 - **Never able to send.** No SMTP code, ever. Writes = only APPEND to Drafts, opt-in.
@@ -38,6 +39,8 @@ TypeScript (tsc 7) · Node >= 20.12 · `@modelcontextprotocol/sdk` · `imapflow`
 - Password stored in keychain only AFTER a successful login test.
 - Non-TLS ports require STARTTLS (localhost exempt). Per-account 30 s hard deadline.
 - Agent configs pin `allinbox@<VERSION>` and pass `serve` explicitly.
+- Views: empty CSP, no network, email text rendered with `textContent` only (test/ui.test.ts enforces it).
+  With an MCP Apps host, `create_draft` only previews; the app-only `save_draft` (user click) is the one that writes.
 
 ## Key decisions
 - **IMAP + app passwords, not Gmail OAuth**: Google's restricted Gmail scopes need a paid yearly

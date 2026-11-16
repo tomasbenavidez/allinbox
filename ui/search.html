@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>allinbox · unified inbox</title>
+<style>
+/* allinbox:base */
+.filters { display: flex; gap: 6px; padding: 0 14px 10px; flex-wrap: wrap; }
+.filters .chip { cursor: pointer; background: var(--bg); color: var(--text); }
+.filters .chip[aria-pressed='false'] { opacity: 0.45; }
+.list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
+.row { border-bottom: 1px solid var(--border); }
+.row:last-child { border-bottom: 0; }
+.row > .line { display: grid; grid-template-columns: 4px 1fr auto; gap: 0 10px; padding: 9px 14px 9px 0; cursor: pointer; width: 100%; text-align: left; border: 0; border-radius: 0; background: none; }
+.row > .line:hover, .row.open > .line { background: var(--bg-soft); }
+.bar { grid-row: span 2; border-radius: 0 3px 3px 0; }
+.from { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.date { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.subject { grid-column: 2 / 4; display: flex; gap: 6px; align-items: center; min-width: 0; }
+.subject .s { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.acc { font-size: 11px; font-weight: 600; padding: 0 6px; border-radius: 4px; flex: none; }
+.also { font-size: 11px; color: var(--muted); flex: none; }
+.reader { padding: 4px 14px 12px 18px; background: var(--bg-soft); }
+.reader .hdr { font-size: 12px; color: var(--muted); white-space: pre-wrap; margin: 0 0 8px; }
+.reader .body { font-family: var(--font); white-space: pre-wrap; word-break: break-word; margin: 0; max-height: 340px; overflow: auto; font-size: 13.5px; }
+.reader .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.empty { padding: 18px 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="card" id="app"><div class="skeleton"><span class="spinner"></span> <span id="loading">Searching every inbox…</span></div></div>
+<!-- allinbox:bridge -->
+<script>
+const PALETTE = ['#3b6fd8', '#d9822b', '#2e9b6a', '#a855c7', '#d1495b', '#0e9aa7', '#8a7a2a', '#5a6acf'];
+const t = (en, es) => (bridge.es() ? es : en);
+const app = document.getElementById('app');
+const state = { query: '', data: null, hidden: new Set(), open: null };
+
+const el = (tag, props = {}, ...children) => {
+  const node = Object.assign(document.createElement(tag), props);
+  for (const c of children) if (c != null) node.append(c);
+  return node;
+};
+const colorOf = (account) => {
+  const ids = state.data?.accounts?.map((a) => a.id) ?? [];
+  const i = Math.max(0, ids.indexOf(account));
+  return PALETTE[i % PALETTE.length];
+};
+const nameOf = (from) => (from.match(/^\s*"?([^"<]+?)"?\s*</)?.[1] ?? from).trim();
+function when(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(+d)) return '';
+  const loc = bridge.hostContext.locale ?? undefined;
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
+  if (now - d < 6 * 864e5) return d.toLocaleDateString(loc, { weekday: 'short' });
+  return d.toLocaleDateString(loc, { day: 'numeric', month: 'short' });
+}
+
+/** Prefer the structured payload in _meta (the model never sees it); fall back to the text lines. */
+function readResult(result) {
+  const ui = result?._meta?.['allinbox/ui'] ?? result?.structuredContent;
+  if (ui?.hits) return ui;
+  const hits = bridge
+    .unwrap(bridge.textOf(result))
+    .split('\n')
+    .map((line) => line.split(' | '))
+    .filter((p) => p.length >= 4 && /:\d+$/.test(p[0]))
+    .map(([id, date, from, ...rest]) => ({ id, account: id.slice(0, id.lastIndexOf(':')), date: date.replace(' ', 'T'), from, subject: rest.join(' | ') }));
+  const accounts = [...new Set(hits.map((h) => h.account))].map((id) => ({ id }));
+  return { hits, accounts, errors: [] };
+}
+
+function render() {
+  const d = state.data;
+  app.replaceChildren();
+  const visible = d.hits.filter((h) => !state.hidden.has(h.account));
+  const nAcc = d.accounts.length - d.errors.length;
+  app.append(
+    el('div', { className: 'head' },
+      el('span', { className: 'title', textContent: state.query ? `“${state.query}”` : t('Latest mail', 'Últimos mails') }),
+      el('span', { className: 'sub', textContent: t(`${d.hits.length} messages · ${nAcc} of ${d.accounts.length} inboxes`, `${d.hits.length} mensajes · ${nAcc} de ${d.accounts.length} casillas`) }),
+    ),
+  );
+  if (d.accounts.length > 1) {
+    const filters = el('div', { className: 'filters' });
+    for (const a of d.accounts) {
+      const n = d.hits.filter((h) => h.account === a.id).length;
+      const chip = el('button', { className: 'chip', title: a.email ?? a.id }, el('span', { className: 'dot' }), `${a.id} · ${n}`);
+      chip.querySelector('.dot').style.background = colorOf(a.id);
+      chip.setAttribute('aria-pressed', String(!state.hidden.has(a.id)));
+      chip.onclick = () => {
+        state.hidden.has(a.id) ? state.hidden.delete(a.id) : state.hidden.add(a.id);
+        render();
+      };
+      filters.append(chip);
+    }
+    app.append(filters);
+  }
+  for (const e of d.errors) {
+    app.append(el('div', { className: 'banner', textContent: t(`${e.account} didn't answer: ${e.error}`, `${e.account} no respondió: ${e.error}`) }));
+  }
+  if (!visible.length) {
+    app.append(el('div', { className: 'empty', textContent: t('No messages found.', 'No se encontraron mensajes.') }));
+    return;
+  }
+  const list = el('ul', { className: 'list' });
+  for (const h of visible) list.append(row(h));
+  app.append(list);
+}
+
+function row(h) {
+  const li = el('li', { className: 'row' + (state.open?.id === h.id ? ' open' : '') });
+  const color = colorOf(h.account);
+  const bar = el('span', { className: 'bar' });
+  bar.style.background = color;
+  const acc = el('span', { className: 'acc', textContent: h.account });
+  acc.style.background = `color-mix(in srgb, ${color} 16%, transparent)`;
+  acc.style.color = color;
+  const line = el('button', { className: 'line' },
+    bar,
+    el('span', { className: 'from', textContent: nameOf(h.from), title: h.from }),
+    el('span', { className: 'date', textContent: when(h.date) }),
+    el('span', { className: 'subject' },
+      acc,
+      el('span', { className: 's', textContent: h.subject }),
+      h.alsoIn?.length ? el('span', { className: 'also', textContent: t(`also in ${h.alsoIn.join(', ')}`, `también en ${h.alsoIn.join(', ')}`) }) : null,
+    ),
+  );
+  line.onclick = () => toggle(h);
+  li.append(line);
+  if (state.open?.id === h.id) li.append(reader(h));
+  return li;
+}
+
+function reader(h) {
+  const box = el('div', { className: 'reader' });
+  const o = state.open;
+  if (o.loading) {
+    box.append(el('div', { className: 'muted' }, el('span', { className: 'spinner' }), ' ', t('Reading…', 'Leyendo…')));
+    return box;
+  }
+  if (o.error) {
+    box.append(el('div', { className: 'banner', textContent: o.error }));
+    return box;
+  }
+  const [head, ...rest] = o.text.split('\n\n');
+  box.append(el('pre', { className: 'hdr', textContent: head }), el('pre', { className: 'body', textContent: rest.join('\n\n') }));
+  const actions = el('div', { className: 'actions' });
+  if (o.kind !== 'thread') {
+    actions.append(el('button', { textContent: t('Whole thread', 'Ver hilo completo'), onclick: () => load(h, 'thread') }));
+  }
+  if (state.data.drafts) {
+    actions.append(el('button', {
+      className: 'primary',
+      textContent: t('Draft a reply', 'Borrador de respuesta'),
+      onclick: (ev) => {
+        ev.target.disabled = true;
+        bridge.sendMessage(t(`Draft a reply to email ${h.id} (“${h.subject}”).`, `Armá un borrador de respuesta al mail ${h.id} (“${h.subject}”).`));
+      },
+    }));
+  }
+  if (actions.childElementCount) box.append(actions);
+  return box;
+}
+
+function toggle(h) {
+  if (state.open?.id === h.id) {
+    state.open = null;
+    render();
+    return;
+  }
+  load(h, 'email');
+}
+
+async function load(h, kind) {
+  state.open = { id: h.id, kind, loading: true };
+  render();
+  try {
+    const tool = kind === 'thread' ? 'read_thread' : 'read_email';
+    const result = await bridge.callTool(tool, { id: h.id });
+    if (state.open?.id !== h.id) return;
+    state.open = { id: h.id, kind, text: bridge.unwrap(bridge.textOf(result)) };
+  } catch (e) {
+    if (state.open?.id !== h.id) return;
+    state.open = { id: h.id, kind, error: String(e.message ?? e) };
+  }
+  render();
+}
+
+bridge.on('ui/notifications/tool-input', (p) => {
+  state.query = p.arguments?.query ?? '';
+});
+bridge.on('ui/notifications/tool-result', (result) => {
+  if (result.isError) {
+    app.replaceChildren(el('div', { className: 'banner', textContent: bridge.unwrap(bridge.textOf(result)) }));
+    return;
+  }
+  state.data = readResult(result);
+  state.data.errors ??= [];
+  state.query ||= state.data.query ?? '';
+  render();
+});
+bridge.on('ui/notifications/tool-cancelled', () => {
+  app.replaceChildren(el('div', { className: 'empty', textContent: t('Search cancelled.', 'Búsqueda cancelada.') }));
+});
+
+bridge.connect('allinbox-search').then(() => {
+  document.getElementById('loading').textContent = t('Searching every inbox…', 'Buscando en todas tus casillas…');
+});
+</script>
+</body>
+</html>
