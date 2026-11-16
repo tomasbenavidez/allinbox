@@ -94,6 +94,22 @@ One `search_all` call fans out to every account in parallel. A slow account time
 
 On Gmail, `query` accepts Gmail search syntax (`from:ana has:attachment`).
 
+## Cards in Claude (MCP Apps)
+
+In hosts that support [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview) (such as Claude),
+two tools also render an interactive card next to the answer. Everywhere else they keep returning plain text.
+
+- **`search_all` → unified inbox.** One color per account, filter chips, a badge when the same email sits in
+  several inboxes, and a banner for accounts that timed out. Tap a message to read it, open the whole thread,
+  or ask for a reply draft.
+- **`create_draft` → draft review.** The agent proposes; **you** edit the recipients, subject and body, then save it
+  to Drafts or discard it. In these hosts only the card can save (`save_draft` is app-only and hidden from the
+  model), and the recipient allowlist is checked live in the card and again on the server.
+
+The cards are plain HTML inlined into the server (no framework, no CDN), load nothing from the network
+(empty CSP, so no tracking pixels) and render email text as text, never as HTML.
+`pnpm preview:ui` writes `docs/ui-preview.html`, both cards in a mock host with sample mail.
+
 ## Security
 
 Giving an AI access to your email deserves a straight answer:
