@@ -23,7 +23,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: node --import tsx --test test/ui.test.ts
+      - run: pnpm test # whole suite: the server changes must not break the IMAP path
 
       - name: Smoke (capability negotiated, as with real hosts)
         run: |

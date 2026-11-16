@@ -84,8 +84,8 @@ async function safeWrite(file: string, content: string): Promise<void> {
   await rename(tmp, file);
 }
 
-/** Sets mcpServers.allinbox, keeping everything else. Refuses to touch unparseable files. */
-async function addToJsonConfig(file: string): Promise<InstallResult> {
+/** Sets mcpServers[name], keeping everything else. Refuses to touch unparseable files. */
+async function addToJsonConfig(file: string, name = 'allinbox', entry: unknown = serverEntry): Promise<InstallResult> {
   const raw = existsSync(file) ? await readFile(file, 'utf8') : '{}';
   let config: Record<string, unknown>;
   try {
@@ -94,10 +94,32 @@ async function addToJsonConfig(file: string): Promise<InstallResult> {
     throw new Error(`${file} is not plain JSON (comments?). Add allinbox by hand.`);
   }
   const servers = (config.mcpServers ?? {}) as Record<string, unknown>;
-  if (JSON.stringify(servers.allinbox) === JSON.stringify(serverEntry)) return 'unchanged';
-  const next = { ...config, mcpServers: { ...servers, allinbox: serverEntry } };
+  if (JSON.stringify(servers[name]) === JSON.stringify(entry)) return 'unchanged';
+  const next = { ...config, mcpServers: { ...servers, [name]: entry } };
   await safeWrite(file, JSON.stringify(next, null, 2) + '\n');
-  return servers.allinbox ? 'updated' : 'added';
+  return servers[name] ? 'updated' : 'added';
+}
+
+// ---- `allinbox demo connect|disconnect`: fake inboxes in Claude Desktop, next to (not instead of) the real entry.
+const DEMO_NAME = 'allinbox-demo';
+export const demoEntry = { command: process.execPath, args: [cliPath, 'demo', '--stdio'] };
+export const demoClaudeCodeCommand = `claude mcp add --scope user ${DEMO_NAME} -- ${[demoEntry.command, ...demoEntry.args].map((a) => JSON.stringify(a)).join(' ')}`;
+
+export async function connectDemo(): Promise<string> {
+  if (claudeDesktopRunning()) throw new Error('Quit Claude Desktop first (it rewrites its config while running), then run this again.');
+  const result = await addToJsonConfig(claudeDesktopConfig, DEMO_NAME, demoEntry);
+  return `${result}: "${DEMO_NAME}" in ${claudeDesktopConfig} (backup kept next to it)`;
+}
+
+export async function disconnectDemo(): Promise<string> {
+  if (claudeDesktopRunning()) throw new Error('Quit Claude Desktop first, then run this again.');
+  if (!existsSync(claudeDesktopConfig)) return 'Nothing to remove.';
+  const config = JSON.parse((await readFile(claudeDesktopConfig, 'utf8')).trim() || '{}') as Record<string, unknown>;
+  const servers = { ...((config.mcpServers ?? {}) as Record<string, unknown>) };
+  if (!(DEMO_NAME in servers)) return 'Nothing to remove.';
+  delete servers[DEMO_NAME];
+  await safeWrite(claudeDesktopConfig, JSON.stringify({ ...config, mcpServers: servers }, null, 2) + '\n');
+  return `removed "${DEMO_NAME}" from ${claudeDesktopConfig}`;
 }
 
 // Matches [mcp_servers.allinbox], [mcp_servers."allinbox"], [mcp_servers.allinbox.env], indented too.

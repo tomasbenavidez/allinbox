@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
 const url = new URL(process.argv[2] ?? 'http://localhost:3333/mcp');
 const UI = 'io.modelcontextprotocol/ui';
@@ -83,5 +84,16 @@ if (process.env.SMOKE_AUTO === '1') {
   assert.match(textOf(direct), /Draft saved/);
   step('text-only host: create_draft saves directly, no save_draft');
   await plain.close();
+}
+// ---- stdio, as `allinbox demo connect` registers it in Claude Desktop
+{
+  const client = new Client({ name: 'smoke-stdio-host', version: '1.0.0' }, { capabilities: { extensions: { [UI]: { mimeTypes: [MIME] } } } });
+  await client.connect(new StdioClientTransport({ command: process.execPath, args: ['dist/cli.js', 'demo', '--stdio'], env: { ...process.env, ALLINBOX_UI: 'auto' } }));
+  const names = (await client.listTools()).tools.map((t) => t.name);
+  assert.ok(names.includes('save_draft'), 'stdio + UI host: save_draft registered');
+  const r = await client.callTool({ name: 'search_all', arguments: { query: 'slide' } });
+  assert.ok(r._meta['allinbox/ui'].hits.length >= 1);
+  step('stdio demo (Claude Desktop path): tools + search');
+  await client.close();
 }
 console.log('demo smoke: all good');

@@ -4,6 +4,7 @@
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { Account, Config } from './config.js';
 import { cleanBody, mergeHits, normalizeSubject, type Hit } from './clean.js';
@@ -138,6 +139,13 @@ export const demoBackend: MailBackend = {
     return 'Drafts (demo, in memory)';
   },
 };
+
+/** Fake inboxes over stdio: what `allinbox demo connect` registers in Claude Desktop. UI is negotiated, as in real use. */
+export async function serveDemoStdio(): Promise<void> {
+  process.env.ALLINBOX_UI ??= 'auto';
+  const server = await createServer(demoConfig, demoBackend);
+  await server.connect(new StdioServerTransport());
+}
 
 // ---------------------------------------------------------------- HTTP (MCP streamable HTTP)
 

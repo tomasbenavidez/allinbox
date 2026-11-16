@@ -32,6 +32,8 @@
     "build": "tsc",
     "dev": "tsx src/cli.ts",
     "preview:ui": "tsx scripts/preview-ui.mjs",
+    "preview:ui:watch": "node --import tsx --watch-path=ui --watch-path=scripts scripts/preview-ui.mjs",
+    "demo": "pnpm build && node dist/cli.js demo connect",
     "prepublishOnly": "pnpm run build && pnpm test"
   },
   "license": "MIT",

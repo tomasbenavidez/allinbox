@@ -5,7 +5,8 @@ import { argv, exit } from 'node:process';
 import { loadConfig, saveConfig, deletePassword } from './config.js';
 import { searchAccount } from './imap.js';
 import { serveStdio } from './server.js';
-import { serveDemo } from './demo.js';
+import { serveDemo, serveDemoStdio } from './demo.js';
+import { connectDemo, disconnectDemo, demoClaudeCodeCommand } from './agents.js';
 import { onboarding, addAccount, connectAgents, friendlyError, closePrompts } from './onboarding.js';
 import { tr } from './i18n.js';
 
@@ -18,7 +19,10 @@ const HELP = `allinbox — all your inboxes, one query, any agent.
   allinbox remove ID    remove an account and its stored password
   allinbox test [ID]    check that accounts can connect
   allinbox serve        force MCP server mode (stdio)
-  allinbox demo         try it with fake inboxes: MCP over HTTP on $PORT (default 3333), path /mcp`;
+  allinbox demo connect     try it with fake inboxes in Claude Desktop (adds "allinbox-demo")
+  allinbox demo disconnect  remove "allinbox-demo" from Claude Desktop
+  allinbox demo --stdio     fake inboxes over stdio (what "demo connect" registers)
+  allinbox demo             fake inboxes over HTTP on $PORT (default 3333), path /mcp`;
 
 async function add(): Promise<void> {
   const config = await loadConfig();
@@ -60,6 +64,14 @@ async function main(): Promise<void> {
     case 'serve':
       return serveStdio();
     case 'demo':
+      if (arg === '--stdio') return serveDemoStdio();
+      if (arg === 'connect') {
+        console.log(await connectDemo());
+        console.log('Open Claude Desktop and ask: "What do I have pending this week across all my email?"');
+        console.log(`Claude Code (text only, no cards): ${demoClaudeCodeCommand}`);
+        return;
+      }
+      if (arg === 'disconnect') return void console.log(await disconnectDemo());
       return serveDemo();
     case 'setup':
       return onboarding();

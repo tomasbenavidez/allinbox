@@ -88,6 +88,13 @@ Demo media lives in `docs/media/` (GIF for the README, MP4 for posts); source co
 Public-repo hygiene: never commit real email addresses, account names or local paths (tests use
 fictional domains). Commits are authored with the GitHub noreply address.
 
+## In progress (2026-11-16): MCP Apps cards, branch `demo/mcp-apps-mock`
+Unified-inbox card for `search_all` and draft-review card for `create_draft` (user saves via app-only
+`save_draft`), plus `allinbox demo` (fake inboxes; `demo connect` adds it to Claude Desktop). CI "Demo smoke"
+is green: real SDK client as UI host, text-only host, HTTP and stdio. NOT yet seen in a real Claude Desktop.
+Tomás is evaluating the design next: follow `docs/mcp-apps.md` (see it → iterate `ui/` with
+`pnpm preview:ui:watch` → ship). Talk to him in Spanish.
+
 ## Next steps, in order
 1. **npm publish** from CI with `--provenance`; fill `repository`, `author`, `keywords`, `homepage`;
    swap the npm link in onboarding for the GitHub one once public.
