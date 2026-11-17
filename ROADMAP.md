@@ -7,6 +7,7 @@ Status of the gaps allinbox exists to close:
 | One query across every inbox, deduplicated | ✅ v0.1 `search_all` |
 | Token-efficient output (no HTML, quotes, signatures; compact threads) | ✅ v0.2 `read_email`, `read_thread` |
 | Safe writes (drafts only, never send, recipient allowlist, prompt-injection framing) | ✅ v0.2 `create_draft` (opt-in) |
+| Visual inbox inside the chat (MCP Apps) | 🧪 prototype: `search_all` view |
 | Proof of the token savings | ⏳ v0.3 benchmark |
 | Search by meaning across years of mail | ⏳ v0.4 local index |
 | Outlook / Hotmail personal accounts | ⏳ v0.5 OAuth |

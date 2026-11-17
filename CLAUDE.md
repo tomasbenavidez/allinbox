@@ -21,6 +21,7 @@ TypeScript (tsc 7) · Node >= 20.12 · `@modelcontextprotocol/sdk` · `imapflow`
 | `src/server.ts` | MCP tools: `list_accounts`, `search_all`, `read_email`, `read_thread`, `create_draft` (only if drafts enabled). |
 | `src/imap.ts` | IMAP: `withClient` (timeouts, error listener), search, read, thread. |
 | `src/drafts.ts` | Draft via IMAP APPEND to `\Drafts`; recipient allowlist. |
+| `src/view.ts`, `src/view.html` | MCP Apps inbox view (`ui://allinbox/inbox.html`) linked from `search_all`. One self-contained HTML file, copied to dist by `scripts/copy-view.mjs`. |
 | `src/clean.ts` | Pure: `cleanBody`, `mergeHits` (dedupe by Message-ID), `formatHits`, `normalizeSubject`. |
 | `src/onboarding.ts` | Bilingual guided setup: accounts → drafts opt-in → connect agents. |
 | `src/agents.ts` | Detects agents, writes their MCP configs (backup + atomic write). |
@@ -38,6 +39,9 @@ TypeScript (tsc 7) · Node >= 20.12 · `@modelcontextprotocol/sdk` · `imapflow`
 - Password stored in keychain only AFTER a successful login test.
 - Non-TLS ports require STARTTLS (localhost exempt). Per-account 30 s hard deadline.
 - Agent configs pin `allinbox@<VERSION>` and pass `serve` explicitly.
+- The MCP Apps view parses the same wrapped text the model gets (no `structuredContent`/`_meta` data
+  channel), renders email with `textContent` only (a test bans innerHTML), loads nothing external (CSP
+  empty), and never writes: actions go to the agent via `ui/message`.
 
 ## Key decisions
 - **IMAP + app passwords, not Gmail OAuth**: Google's restricted Gmail scopes need a paid yearly
@@ -56,6 +60,8 @@ pnpm build
 node dist/cli.js setup   # try onboarding (ALLINBOX_HOME=<tmp> to keep your real config clean)
 ```
 Gotchas:
+- `pnpm preview:ui` serves the inbox view in a fake MCP Apps host (fictional mail, hostile sample
+  included) at http://127.0.0.1:5180 to iterate on the design without Claude.
 - GreenMail reports the Draft flag with an extra backslash; real servers report `\Draft`
   (verified on the wire that imapflow sends it correctly). Test checks `endsWith('Draft')`.
 - Docker Desktop on this Windows Insider build leaves stale AF_UNIX sockets

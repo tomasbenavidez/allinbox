@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>allinbox</title>
+<style>
+  /* Host style variables (MCP Apps) win; these are the fallbacks. */
+  :root {
+    color-scheme: light dark;
+    --bg: var(--color-background-primary, #ffffff);
+    --bg-2: var(--color-background-secondary, #f6f5f2);
+    --bg-3: var(--color-background-tertiary, #eeece7);
+    --fg: var(--color-text-primary, #1d1c1a);
+    --fg-2: var(--color-text-secondary, #5f5d58);
+    --fg-3: var(--color-text-tertiary, #8d8a83);
+    --line: var(--color-border-tertiary, #e7e4dd);
+    --line-2: var(--color-border-secondary, #d6d2c9);
+    --warn-bg: var(--color-background-warning, #fdf3dc);
+    --warn-fg: var(--color-text-warning, #8a5a00);
+    --ring: var(--color-ring-primary, #6b5bd2);
+    --accent: #6b5bd2;
+    --on-accent: #ffffff;
+    --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+    --sans: var(--font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+    --mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    --r-sm: var(--border-radius-sm, 6px);
+    --r-md: var(--border-radius-md, 10px);
+    --r-lg: var(--border-radius-lg, 14px);
+    --a0: #6b5bd2; --a1: #0f8a6c; --a2: #d0632b; --a3: #2f6fd6; --a4: #b8487a; --a5: #8a7a12;
+  }
+  :root[data-theme="dark"] {
+    --bg: var(--color-background-primary, #1f1e1c);
+    --bg-2: var(--color-background-secondary, #262523);
+    --bg-3: var(--color-background-tertiary, #302f2c);
+    --fg: var(--color-text-primary, #f1efea);
+    --fg-2: var(--color-text-secondary, #b9b5ac);
+    --fg-3: var(--color-text-tertiary, #8a867e);
+    --line: var(--color-border-tertiary, #34322f);
+    --line-2: var(--color-border-secondary, #45433f);
+    --warn-bg: var(--color-background-warning, #3a2f17);
+    --warn-fg: var(--color-text-warning, #f0c674);
+    --accent: #a497ff;
+    --on-accent: #17132e;
+    --a0: #a497ff; --a1: #4fd1a8; --a2: #f2955f; --a3: #79a8ff; --a4: #f08cb8; --a5: #d9c95a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; }
+  body { font: 14px/1.45 var(--sans); color: var(--fg); -webkit-font-smoothing: antialiased; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+  .app { background: var(--bg); border-radius: var(--r-lg); overflow: hidden; }
+  .fullscreen .app { border-radius: 0; min-height: 100vh; }
+
+  /* Header */
+  .head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; }
+  .mark { width: 28px; height: 28px; flex: none; border-radius: 8px; display: grid; place-items: center;
+          background: linear-gradient(135deg, var(--a0), var(--a3)); color: #fff; }
+  .title { min-width: 0; flex: 1; }
+  .title b { font-weight: 650; letter-spacing: -0.01em; }
+  .summary { color: var(--fg-2); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .icon-btn { border: 1px solid var(--line); background: var(--bg); border-radius: var(--r-sm);
+              width: 30px; height: 30px; display: grid; place-items: center; color: var(--fg-2); flex: none; }
+  .icon-btn:hover { background: var(--bg-2); color: var(--fg); }
+
+  .search { display: flex; gap: 8px; padding: 0 16px 10px; }
+  .search label { flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 10px; height: 34px;
+                  border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--bg-2); color: var(--fg-3); }
+  .search label:focus-within { border-color: var(--ring); }
+  .search input { border: 0; outline: 0; background: transparent; flex: 1; min-width: 0; color: var(--fg); }
+  .search select { border: 1px solid var(--line-2); background: var(--bg-2); border-radius: var(--r-md); padding: 0 8px; height: 34px; color: var(--fg-2); }
+
+  .chips { display: flex; gap: 6px; padding: 0 16px 12px; overflow-x: auto; scrollbar-width: none; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px;
+          border: 1px solid var(--line); background: var(--bg); color: var(--fg-2); font-size: 12.5px; white-space: nowrap; }
+  .chip[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+  .chip .n { opacity: .65; font-variant-numeric: tabular-nums; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+  .banner { margin: 0 16px 10px; padding: 8px 10px; border-radius: var(--r-sm); background: var(--warn-bg); color: var(--warn-fg); font-size: 12.5px; }
+
+  /* List */
+  .list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+  .row { border-bottom: 1px solid var(--line); }
+  .row > button { all: unset; box-sizing: border-box; width: 100%; display: grid; cursor: pointer;
+                  grid-template-columns: 34px 1fr auto; gap: 2px 12px; align-items: center; padding: 10px 16px; }
+  .row > button:hover { background: var(--bg-2); }
+  .row > button:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+  .row.open > button { background: var(--bg-2); }
+  .avatar { grid-row: span 2; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+            font-size: 12.5px; font-weight: 650; color: #fff; letter-spacing: .02em; }
+  .from { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .when { color: var(--fg-3); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; justify-self: end; }
+  .subject { color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .tags { display: flex; gap: 4px; justify-self: end; }
+  .tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--fg-2); white-space: nowrap;
+         border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px 1px 6px; }
+  .tag.dup { color: var(--fg-3); border-style: dashed; }
+
+  .more { display: block; width: 100%; padding: 10px; border: 0; background: transparent; color: var(--accent); font-weight: 600; }
+  .more:hover { background: var(--accent-soft); }
+
+  /* Reading pane */
+  .reader { padding: 4px 16px 16px 62px; background: var(--bg-2); }
+  .msg { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 14px; margin-top: 8px; }
+  .msg-h { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--fg-2); margin-bottom: 8px; }
+  .msg-h b { color: var(--fg); font-weight: 600; }
+  .msg-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13.5px; max-height: 340px; overflow: auto; }
+  .att { margin-top: 8px; font-size: 12px; color: var(--fg-3); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: var(--r-sm);
+         border: 1px solid var(--line-2); background: var(--bg); font-size: 13px; font-weight: 550; }
+  .btn:hover { background: var(--bg-3); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .note { font-size: 12px; color: var(--fg-3); margin-top: 8px; }
+
+  /* States */
+  .empty { padding: 34px 16px; text-align: center; color: var(--fg-2); }
+  .skel { height: 54px; border-bottom: 1px solid var(--line); padding: 12px 16px; display: grid; grid-template-columns: 34px 1fr; gap: 12px; }
+  .skel i { display: block; border-radius: 6px; background: linear-gradient(90deg, var(--bg-2), var(--bg-3), var(--bg-2)); background-size: 200% 100%; animation: sh 1.2s infinite linear; }
+  .skel i:first-child { border-radius: 50%; height: 30px; }
+  @keyframes sh { to { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skel i { animation: none; } }
+
+  .foot { display: flex; align-items: center; gap: 6px; padding: 10px 16px; color: var(--fg-3); font-size: 11.5px; }
+  .foot svg { flex: none; }
+  .hidden { display: none !important; }
+
+  @media (max-width: 480px) {
+    .reader { padding-left: 16px; }
+    .tags .tag:not(:first-child) { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="head">
+    <div class="mark" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+    </div>
+    <div class="title">
+      <b>allinbox</b>
+      <div class="summary" id="summary"></div>
+    </div>
+    <button class="icon-btn hidden" id="fs" type="button" aria-label="Fullscreen">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+    </button>
+  </div>
+  <form class="search" id="search">
+    <label>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" autocomplete="off" spellcheck="false">
+    </label>
+    <select id="days" aria-label="Range">
+      <option value="7">7d</option><option value="30">30d</option><option value="90">90d</option><option value="365">1y</option>
+    </select>
+  </form>
+  <div class="chips" id="chips" role="toolbar"></div>
+  <div class="banner hidden" id="banner"></div>
+  <ul class="list" id="list" aria-live="polite"></ul>
+  <div class="foot">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    <span id="foot"></span>
+  </div>
+</div>
+<script>
+(() => {
+  'use strict';
+  // ---------- i18n ----------
+  const STR = {
+    en: {
+      searching: (n) => `Searching ${n ? n + ' inboxes' : 'every inbox'}…`,
+      summary: (m, a) => `${m} message${m === 1 ? '' : 's'} · ${a} account${a === 1 ? '' : 's'}`,
+      latest: 'latest', placeholder: 'Search all inboxes', all: 'All',
+      empty: 'No messages found.', showAll: (n) => `Show all ${n}`,
+      loading: 'Loading conversation…', also: 'also in',
+      summarize: 'Summarize', draft: 'Draft reply', close: 'Close',
+      draftNote: 'Claude writes the draft; allinbox can only save it to Drafts. It never sends.',
+      sent: 'Asked Claude ✓', failed: (a) => `${a} failed`, foot: 'Read-only · never sends',
+      askSummarize: (id) => `Summarize the email thread ${id} (use allinbox read_thread).`,
+      askDraft: (id) => `Help me draft a reply to email ${id}. Read the thread first, show me the draft, and only save it to Drafts if I confirm.`,
+      err: 'Could not load this conversation.', attachments: 'Attachments',
+    },
+    es: {
+      searching: (n) => `Buscando en ${n ? n + ' casillas' : 'todas las casillas'}…`,
+      summary: (m, a) => `${m} mensaje${m === 1 ? '' : 's'} · ${a} cuenta${a === 1 ? '' : 's'}`,
+      latest: 'recientes', placeholder: 'Buscar en todas las casillas', all: 'Todas',
+      empty: 'No se encontraron mensajes.', showAll: (n) => `Ver los ${n}`,
+      loading: 'Cargando conversación…', also: 'también en',
+      summarize: 'Resumir', draft: 'Borrador de respuesta', close: 'Cerrar',
+      draftNote: 'Claude escribe el borrador; allinbox solo puede guardarlo en Borradores. Nunca envía.',
+      sent: 'Pedido a Claude ✓', failed: (a) => `${a} falló`, foot: 'Solo lectura · nunca envía',
+      askSummarize: (id) => `Resumí el hilo del mail ${id} (usá read_thread de allinbox).`,
+      askDraft: (id) => `Ayudame con un borrador de respuesta al mail ${id}. Leé el hilo primero, mostrame el borrador y guardalo en Borradores solo si confirmo.`,
+      err: 'No se pudo cargar la conversación.', attachments: 'Adjuntos',
+    },
+  };
+  let lang = 'en';
+  const t = (k, ...a) => { const v = STR[lang][k]; return typeof v === 'function' ? v(...a) : v; };
+
+  // ---------- MCP Apps bridge (JSON-RPC 2.0 over postMessage) ----------
+  const host = window.parent;
+  let seq = 0;
+  const pending = new Map();
+  const post = (msg) => host.postMessage({ jsonrpc: '2.0', ...msg }, '*');
+  const notify = (method, params = {}) => post({ method, params });
+  const request = (method, params = {}) => new Promise((resolve, reject) => {
+    const id = ++seq;
+    pending.set(id, { resolve, reject });
+    post({ id, method, params });
+    setTimeout(() => { if (pending.delete(id)) reject(new Error('timeout')); }, 60000);
+  });
+  window.addEventListener('message', (e) => {
+    if (e.source !== host) return;
+    const m = e.data;
+    if (!m || m.jsonrpc !== '2.0') return;
+    if (m.method) {
+      if (m.method === 'ui/notifications/tool-input') onInput(m.params?.arguments || {});
+      else if (m.method === 'ui/notifications/tool-result') onResult(m.params || {});
+      else if (m.method === 'ui/notifications/tool-cancelled') render();
+      else if (m.method === 'ui/notifications/host-context-changed') applyContext(m.params || {});
+      if (m.id !== undefined) post({ id: m.id, result: {} }); // ping, ui/resource-teardown
+    } else if (m.id !== undefined && pending.has(m.id)) {
+      const p = pending.get(m.id); pending.delete(m.id);
+      m.error ? p.reject(new Error(m.error.message || 'error')) : p.resolve(m.result);
+    }
+  });
+
+  let ctx = {};
+  let caps = {};
+  function applyContext(c) {
+    ctx = { ...ctx, ...c };
+    if (ctx.theme) document.documentElement.dataset.theme = ctx.theme;
+    const vars = ctx.styles?.variables;
+    if (vars) for (const [k, v] of Object.entries(vars)) if (v) document.documentElement.style.setProperty(k, v);
+    if (ctx.locale) lang = String(ctx.locale).toLowerCase().startsWith('es') ? 'es' : 'en';
+    document.documentElement.lang = lang;
+    document.body.classList.toggle('fullscreen', ctx.displayMode === 'fullscreen');
+    $('fs').classList.toggle('hidden', !(ctx.availableDisplayModes || []).includes('fullscreen'));
+    staticText();
+    render();
+  }
+
+  // ---------- Parsing (the same text the model gets; never HTML) ----------
+  const WRAP = /^<\/?untrusted_email_[0-9a-f]+[^>]*>$/;
+  const textOf = (r) => (r.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+  function unwrap(text) {
+    const lines = text.split('\n');
+    const start = lines.findIndex((l) => WRAP.test(l));
+    const end = lines.findIndex((l, i) => i > start && /^<\/untrusted_email_[0-9a-f]+>$/.test(l));
+    if (start < 0 || end < 0) return { inner: '', rest: lines };
+    return { inner: lines.slice(start + 1, end).join('\n'), rest: lines.slice(end + 1) };
+  }
+  const HIT = /^(.+:\d+) \| (\d{4}-\d\d-\d\d \d\d:\d\d) \| (.*?) \| (.*)$/;
+  function parseHits(text) {
+    const { inner, rest } = unwrap(text);
+    const hits = [];
+    for (const line of inner.split('\n')) {
+      const m = HIT.exec(line);
+      if (!m) continue;
+      let subject = m[4], alsoIn = [];
+      const also = / \(also in ([^()]+)\)$/.exec(subject);
+      if (also) { alsoIn = also[1].split(', '); subject = subject.slice(0, also.index); }
+      const id = m[1];
+      hits.push({ id, account: id.slice(0, id.lastIndexOf(':')), date: m[2].replace(' ', 'T') + 'Z', from: m[3], subject, alsoIn });
+    }
+    const errors = rest.map((l) => /^! (.+?) failed: (.*)$/.exec(l)).filter(Boolean).map((m) => ({ account: m[1], error: m[2] }));
+    return { hits, errors };
+  }
+  function parseThread(text) {
+    const { inner } = unwrap(text);
+    const parts = inner.split(/^--- (.+:\d+) ---$/m);
+    const chunks = parts.length > 1 ? parts.slice(1).reduce((a, p, i) => (i % 2 ? a[a.length - 1].push(p) : a.push([p]), a), []) : [[null, inner]];
+    return chunks.map(([id, raw]) => {
+      const body = raw.replace(/^\n+/, '');
+      const split = body.indexOf('\n\n');
+      const head = split < 0 ? body : body.slice(0, split);
+      const h = {};
+      for (const l of head.split('\n')) { const i = l.indexOf(': '); if (i > 0) h[l.slice(0, i)] = l.slice(i + 2); }
+      return { id, from: h.From || '', date: h.Date || '', attachments: h.Attachments || '', body: split < 0 ? '' : body.slice(split + 2).trim() };
+    });
+  }
+
+  // ---------- State ----------
+  const S = { phase: 'idle', args: {}, hits: [], errors: [], filter: null, open: null, threads: {}, expanded: false };
+  function onInput(args) { S.args = args; S.phase = 'loading'; S.open = null; syncForm(); render(); }
+  function onResult(r) {
+    if (r.isError) { S.hits = []; S.errors = [{ account: 'allinbox', error: textOf(r) }]; }
+    else Object.assign(S, parseHits(textOf(r)));
+    S.phase = 'done'; S.filter = null; S.open = null; S.threads = {}; S.expanded = false;
+    render();
+  }
+
+  // ---------- Rendering (textContent only: email text can never become markup) ----------
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const accounts = () => [...new Set(S.hits.flatMap((h) => [h.account, ...h.alsoIn]))].sort();
+  const colorOf = (acc) => `var(--a${Math.max(0, accounts().indexOf(acc)) % 6})`;
+  const AVATARS = ['#5b6ee1', '#2f9e7a', '#d0702f', '#b5527f', '#3a8fb7', '#8a6bd1', '#6f8f2f', '#c2563f'];
+  function hash(s) { let x = 0; for (const c of s) x = (x * 31 + c.charCodeAt(0)) | 0; return Math.abs(x); }
+  const senderName = (from) => (from.replace(/<[^>]*>/, '').replace(/"/g, '').trim() || from.replace(/[<>]/g, '')).trim();
+  const initials = (name) => (name.match(/[\p{L}\p{N}]+/gu) || ['?']).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  function when(iso) {
+    const d = new Date(iso); if (isNaN(d)) return '';
+    const opts = ctx.timeZone ? { timeZone: ctx.timeZone } : {};
+    const loc = ctx.locale || undefined;
+    const now = new Date();
+    const sameDay = d.toLocaleDateString(loc, opts) === now.toLocaleDateString(loc, opts);
+    if (sameDay) return d.toLocaleTimeString(loc, { ...opts, hour: '2-digit', minute: '2-digit' });
+    const sameYear = d.getUTCFullYear() === now.getUTCFullYear();
+    return d.toLocaleDateString(loc, { ...opts, day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }) });
+  }
+
+  function staticText() {
+    $('q').placeholder = t('placeholder');
+    $('foot').textContent = t('foot');
+  }
+  function syncForm() {
+    $('q').value = S.args.query || '';
+    const d = String(S.args.since_days || 30);
+    if (![...$('days').options].some((o) => o.value === d)) $('days').add(new Option(d + 'd', d));
+    $('days').value = d;
+  }
+
+  function render() {
+    const list = $('list'); list.replaceChildren();
+    const chips = $('chips'); chips.replaceChildren();
+    const banner = $('banner');
+    banner.classList.toggle('hidden', !S.errors.length);
+    banner.textContent = S.errors.map((e) => `⚠ ${t('failed', e.account)}: ${e.error}`).join('  ·  ');
+
+    if (S.phase === 'loading' || S.phase === 'idle') {
+      $('summary').textContent = t('searching', (S.args.accounts || []).length);
+      for (let i = 0; i < 4; i++) { const s = el('li', 'skel'); s.append(el('i'), el('i')); list.append(s); }
+      return resize();
+    }
+    const accs = accounts();
+    const q = S.args.query ? `“${S.args.query}”` : t('latest');
+    $('summary').textContent = `${t('summary', S.hits.length, accs.length)} · ${q} · ${S.args.since_days || 30}d`;
+
+    if (accs.length > 1) {
+      const chip = (label, acc, n) => {
+        const b = el('button', 'chip'); b.type = 'button';
+        b.setAttribute('aria-pressed', String(S.filter === acc));
+        if (acc) { const d = el('span', 'dot'); d.style.background = colorOf(acc); b.append(d); }
+        b.append(el('span', null, label), el('span', 'n', String(n)));
+        b.onclick = () => { S.filter = acc; S.expanded = false; render(); };
+        chips.append(b);
+      };
+      chip(t('all'), null, S.hits.length);
+      for (const a of accs) chip(a, a, S.hits.filter((h) => h.account === a || h.alsoIn.includes(a)).length);
+    }
+
+    const shown = S.hits.filter((h) => !S.filter || h.account === S.filter || h.alsoIn.includes(S.filter));
+    if (!shown.length) { list.append(el('li', 'empty', t('empty'))); return resize(); }
+    const LIMIT = 8;
+    const fullscreen = ctx.displayMode === 'fullscreen';
+    const visible = S.expanded || fullscreen ? shown : shown.slice(0, LIMIT);
+    for (const h of visible) list.append(row(h));
+    if (visible.length < shown.length) {
+      const li = el('li'); const b = el('button', 'more', t('showAll', shown.length)); b.type = 'button';
+      b.onclick = () => { S.expanded = true; render(); };
+      li.append(b); list.append(li);
+    }
+    resize();
+  }
+
+  function row(h) {
+    const li = el('li', 'row' + (S.open === h.id ? ' open' : ''));
+    const b = el('button'); b.type = 'button'; b.setAttribute('aria-expanded', String(S.open === h.id));
+    const name = senderName(h.from);
+    const av = el('span', 'avatar', initials(name));
+    av.style.background = AVATARS[hash(name) % AVATARS.length];
+    av.setAttribute('aria-hidden', 'true');
+    const tags = el('span', 'tags');
+    const tag = el('span', 'tag'); const dot = el('span', 'dot'); dot.style.background = colorOf(h.account);
+    tag.append(dot, h.account); tags.append(tag);
+    if (h.alsoIn.length) { const d = el('span', 'tag dup', `+${h.alsoIn.length}`); d.title = `${t('also')} ${h.alsoIn.join(', ')}`; tags.append(d); }
+    b.title = h.from;
+    b.append(av, el('span', 'from', name), el('span', 'when', when(h.date)), el('span', 'subject', h.subject), tags);
+    b.onclick = () => toggle(h.id);
+    li.append(b);
+    if (S.open === h.id) li.append(reader(h));
+    return li;
+  }
+
+  function reader(h) {
+    const box = el('div', 'reader');
+    const th = S.threads[h.id];
+    if (!th) box.append(el('div', 'note', t('loading')));
+    else if (th.error) box.append(el('div', 'note', t('err') + ' ' + th.error));
+    else for (const m of th.messages) {
+      const card = el('div', 'msg');
+      const head = el('div', 'msg-h');
+      head.append(el('b', null, senderName(m.from) || h.from), el('span', null, when(m.date)));
+      card.append(head, el('div', 'msg-body', m.body));
+      if (m.attachments) card.append(el('div', 'att', `📎 ${t('attachments')}: ${m.attachments}`));
+      box.append(card);
+    }
+    const actions = el('div', 'actions');
+    const ask = (label, cls, text) => {
+      const b = el('button', 'btn' + cls, label); b.type = 'button';
+      b.onclick = async () => {
+        b.disabled = true;
+        try { const r = await request('ui/message', { role: 'user', content: [{ type: 'text', text }] }); b.textContent = r?.isError ? '✕' : t('sent'); }
+        catch { b.textContent = '✕'; }
+      };
+      return b;
+    };
+    actions.append(ask(t('summarize'), ' primary', t('askSummarize', h.id)), ask(t('draft'), '', t('askDraft', h.id)));
+    const close = el('button', 'btn', t('close')); close.type = 'button'; close.onclick = () => toggle(h.id);
+    actions.append(close);
+    box.append(actions, el('div', 'note', t('draftNote')));
+    return box;
+  }
+
+  async function toggle(id) {
+    S.open = S.open === id ? null : id;
+    render();
+    if (!S.open || S.threads[id]) return;
+    try {
+      const r = await request('tools/call', { name: 'read_thread', arguments: { id, max_chars: 8000 } });
+      S.threads[id] = r.isError ? { error: textOf(r) } : { messages: parseThread(textOf(r)) };
+    } catch (e) { S.threads[id] = { error: e.message }; }
+    if (S.open === id) render();
+  }
+
+  $('search').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const args = { query: $('q').value.trim() || undefined, since_days: Number($('days').value), limit: 50 };
+    onInput(args);
+    try { onResult(await request('tools/call', { name: 'search_all', arguments: args })); }
+    catch (err) { onResult({ isError: true, content: [{ type: 'text', text: err.message }] }); }
+  });
+  $('days').addEventListener('change', () => $('search').requestSubmit());
+  $('fs').addEventListener('click', async () => {
+    const mode = ctx.displayMode === 'fullscreen' ? 'inline' : 'fullscreen';
+    try { const r = await request('ui/request-display-mode', { mode }); applyContext({ displayMode: r?.mode || mode }); } catch {}
+  });
+
+  let lastH = 0;
+  function resize() {
+    requestAnimationFrame(() => {
+      const h = Math.ceil(document.getElementById('app').getBoundingClientRect().height);
+      if (h !== lastH) { lastH = h; notify('ui/notifications/size-changed', { height: h }); }
+    });
+  }
+  new ResizeObserver(resize).observe(document.getElementById('app'));
+
+  staticText();
+  render();
+  request('ui/initialize', {
+    appInfo: { name: 'allinbox', version: '__VERSION__' },
+    appCapabilities: { availableDisplayModes: ['inline', 'fullscreen'] },
+    protocolVersion: '2026-01-26',
+  }).then((r) => {
+    caps = r?.hostCapabilities || {};
+    $('search').classList.toggle('hidden', !caps.serverTools); // re-search needs the host to proxy tools
+    applyContext(r?.hostContext || {});
+    notify('ui/notifications/initialized');
+  }).catch(() => {});
+})();
+</script>
+</body>
+</html>

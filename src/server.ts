@@ -6,6 +6,7 @@ import { loadConfig, type Account, type Config } from './config.js';
 import { readMessage, readThread, searchAll } from './imap.js';
 import { createDraft } from './drafts.js';
 import { formatHits } from './clean.js';
+import { VIEW_MIME, VIEW_RESOURCE_META, VIEW_TOOL_META, VIEW_URI, viewHtml } from './view.js';
 
 import { VERSION } from './version.js';
 
@@ -82,6 +83,7 @@ export async function createServer(config: Config): Promise<McpServer> {
         accounts: z.array(z.string()).max(50).optional().describe('Restrict to these account ids. Default: all.'),
       },
       annotations: READ_ONLY,
+      _meta: VIEW_TOOL_META,
     },
     async ({ query, since_days, limit, accounts }) => {
       try {
@@ -128,6 +130,13 @@ export async function createServer(config: Config): Promise<McpServer> {
         return fail(errMsg(e));
       }
     },
+  );
+
+  server.registerResource(
+    'inbox_view',
+    VIEW_URI,
+    { title: 'allinbox inbox', description: 'Interactive view of search_all results.', mimeType: VIEW_MIME },
+    async () => ({ contents: [{ uri: VIEW_URI, mimeType: VIEW_MIME, text: viewHtml(), _meta: VIEW_RESOURCE_META }] }),
   );
 
   if (config.drafts.enabled) {

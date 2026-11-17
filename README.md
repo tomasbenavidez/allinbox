@@ -94,6 +94,17 @@ One `search_all` call fans out to every account in parallel. A slow account time
 
 On Gmail, `query` accepts Gmail search syntax (`from:ana has:attachment`).
 
+### Inbox view (MCP Apps)
+
+In clients that support [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) (Claude, ChatGPT, VS Code, Goose),
+`search_all` also renders an interactive inbox inline in the chat: filter by account, open a conversation,
+search again without spending tokens, and ask the agent to summarize or draft a reply with one click.
+It follows the host's theme and language. Other clients keep getting plain text, so nothing changes for them.
+
+The view shows exactly what the agent already receives, renders email as plain text (never HTML),
+loads nothing from the network, and has no button that writes mail: "Draft reply" asks the agent,
+which can only save a draft.
+
 ## Security
 
 Giving an AI access to your email deserves a straight answer:
@@ -184,6 +195,7 @@ Issues and PRs are welcome.
 pnpm install
 pnpm test     # unit tests + IMAP integration tests against GreenMail in Docker
 pnpm build
+pnpm preview:ui  # the MCP Apps inbox view in a fake host with fictional mail
 ```
 
 Please read the invariants in [CLAUDE.md](CLAUDE.md) before touching anything near sending, flags or the untrusted-content wrapper.

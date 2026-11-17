@@ -29,8 +29,9 @@
   "main": "dist/server.js",
   "scripts": {
     "test": "node --import tsx --test test/*.test.ts",
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-view.mjs",
     "dev": "tsx src/cli.ts",
+    "preview:ui": "pnpm build && node scripts/preview-view.mjs",
     "prepublishOnly": "pnpm run build && pnpm test"
   },
   "license": "MIT",
