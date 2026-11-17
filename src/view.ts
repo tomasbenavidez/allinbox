@@ -9,7 +9,7 @@ export const VIEW_MIME = 'text/html;profile=mcp-app';
 /** Tool _meta linking a tool to the view (modern key + the legacy flat key older hosts read). */
 export const VIEW_TOOL_META = { ui: { resourceUri: VIEW_URI }, 'ui/resourceUri': VIEW_URI };
 /** No network, no external resources: the view is one self-contained file. */
-export const VIEW_RESOURCE_META = { ui: { prefersBorder: true, csp: { connectDomains: [], resourceDomains: [] } } };
+export const VIEW_RESOURCE_META = { ui: { prefersBorder: false, csp: { connectDomains: [], resourceDomains: [] } } };
 
 let cached: string | undefined;
 export const viewHtml = (): string =>

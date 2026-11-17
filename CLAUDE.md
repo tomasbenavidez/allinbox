@@ -41,7 +41,8 @@ TypeScript (tsc 7) · Node >= 20.12 · `@modelcontextprotocol/sdk` · `imapflow`
 - Agent configs pin `allinbox@<VERSION>` and pass `serve` explicitly.
 - The MCP Apps view parses the same wrapped text the model gets (no `structuredContent`/`_meta` data
   channel), renders email with `textContent` only (a test bans innerHTML), loads nothing external (CSP
-  empty), and never writes: actions go to the agent via `ui/message`.
+  empty), and never writes: actions go to the agent via `ui/message`. Glass look: own colors per
+  theme, only the host's fonts are applied.
 
 ## Key decisions
 - **IMAP + app passwords, not Gmail OAuth**: Google's restricted Gmail scopes need a paid yearly
