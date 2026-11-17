@@ -110,6 +110,13 @@ export function friendlyError(e: unknown, account: Pick<Account, 'host' | 'port'
   const err = e as { code?: string; responseText?: string; message?: string };
   const text = `${err.responseText ?? ''} ${err.message ?? ''}`;
   const authFailed = isAuthRefusal(e);
+  if (/authenticated but not connected/i.test(text)) {
+    // Not the user's doing: imap.ts already retried several times. Do not send them to check settings.
+    return {
+      en: 'Microsoft accepted your sign-in, then its mail server refused to open the mailbox ("authenticated but not connected"). This is a known intermittent fault on Microsoft\'s side for personal Outlook accounts, worse on new ones. Try again in a few minutes.',
+      es: 'Microsoft aceptó tu inicio de sesión, pero su servidor de correo se negó a abrir la casilla ("authenticated but not connected"). Es una falla intermitente conocida del lado de Microsoft en cuentas personales de Outlook, peor en las nuevas. Probá de nuevo en unos minutos.',
+    };
+  }
   if (authFailed && account.oauth) {
     // The sign-in itself worked (we hold a token); it is the mailbox that said no.
     const who = account.email ?? '';

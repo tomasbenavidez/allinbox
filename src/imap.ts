@@ -21,6 +21,13 @@ const isoDate = (d: Date | string | undefined): string => {
 
 const isLocalHost = (host: string) => host === '127.0.0.1' || host === 'localhost' || host === '::1';
 
+// Microsoft's consumer mailboxes (outlook/hotmail/live) accept a valid OAuth login and then refuse to
+// open the mailbox, at random: reported at roughly 1 success in 3 to 5 attempts, with any client, token
+// or client id. A fresh connection is the only cure, so the login is retried inside the deadline.
+const FLAKY_LOGIN = /authenticated but not connected/i;
+const FLAKY_LOGIN_TRIES = 8;
+const FLAKY_LOGIN_PAUSE_MS = 250;
+
 /**
  * `secret` overrides the keychain: onboarding tests a credential before storing it.
  * It is a password, or an access token for OAuth accounts.
@@ -29,43 +36,58 @@ export async function withClient<T>(account: Account, fn: (c: ImapFlow) => Promi
   const auth = account.oauth
     ? { user: account.user, accessToken: secret ?? (await accessToken(account)) } // XOAUTH2
     : { user: account.user, pass: secret ?? getPassword(account.id) };
-  const client = new ImapFlow({
-    host: account.host,
-    port: account.port,
-    secure: account.secure,
-    // Non-TLS ports must upgrade with STARTTLS or fail: never send a password in clear over the network.
-    // Localhost is exempt (Proton Bridge, test servers).
-    ...(account.secure || isLocalHost(account.host) ? {} : { doSTARTTLS: true }),
-    auth,
-    logger: false,
-    connectionTimeout: 15_000,
-    socketTimeout: 20_000,
-  });
-  // Socket errors after connect are emitted as events; unhandled, they would crash the MCP process.
-  // In-flight commands still reject, so nothing is swallowed.
-  client.on('error', () => {});
-  // Hard deadline: a server that logs in and then stalls must not hold the agent's whole call
-  // (MCP clients give up around 60 s). Closing the socket rejects whatever is pending.
-  let timedOut = false;
-  const deadline = setTimeout(() => {
-    timedOut = true;
-    client.close();
-  }, OPERATION_TIMEOUT_MS);
-  deadline.unref();
-  try {
-    await client.connect();
-    return await fn(client);
-  } catch (e) {
-    if (timedOut) throw new Error(`${account.id} timed out after ${OPERATION_TIMEOUT_MS / 1000}s`);
-    // Which login mechanisms the server offered: the first thing to know when it refuses a token.
-    if (e instanceof Error) {
-      (e as Error & { serverAuth?: string }).serverAuth = [...client.capabilities.keys()].filter((c) => /^AUTH=|^SASL-IR$/.test(c)).join(' ');
+  // Hard deadline for the whole operation, retries included: a server that logs in and then stalls
+  // must not hold the agent's whole call (MCP clients give up around 60 s).
+  const deadlineAt = Date.now() + OPERATION_TIMEOUT_MS;
+  for (let attempt = 1; ; attempt++) {
+    const client = new ImapFlow({
+      host: account.host,
+      port: account.port,
+      secure: account.secure,
+      // Non-TLS ports must upgrade with STARTTLS or fail: never send a password in clear over the network.
+      // Localhost is exempt (Proton Bridge, test servers).
+      ...(account.secure || isLocalHost(account.host) ? {} : { doSTARTTLS: true }),
+      auth,
+      logger: false,
+      connectionTimeout: 15_000,
+      socketTimeout: 20_000,
+    });
+    // Socket errors after connect are emitted as events; unhandled, they would crash the MCP process.
+    // In-flight commands still reject, so nothing is swallowed.
+    client.on('error', () => {});
+    // Closing the socket rejects whatever is pending.
+    let timedOut = false;
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      client.close();
+    }, Math.max(0, deadlineAt - Date.now()));
+    deadline.unref();
+    let loggedIn = false;
+    try {
+      await client.connect();
+      loggedIn = true;
+      return await fn(client);
+    } catch (e) {
+      if (timedOut) throw new Error(`${account.id} timed out after ${OPERATION_TIMEOUT_MS / 1000}s`);
+      const err = e as Error & { responseText?: string; response?: unknown; serverAuth?: string };
+      // Only a refused login is retried: once `fn` has started, running it twice could repeat a write.
+      if (!loggedIn && FLAKY_LOGIN.test(`${err.responseText} ${err.response} ${err.message}`)) {
+        if (attempt < FLAKY_LOGIN_TRIES && Date.now() + FLAKY_LOGIN_PAUSE_MS < deadlineAt) {
+          await new Promise((resolve) => setTimeout(resolve, FLAKY_LOGIN_PAUSE_MS));
+          continue;
+        }
+        err.message = `${account.id}: Microsoft accepted the sign-in but refused to open the mailbox ${attempt} times in a row ("User is authenticated but not connected"). This is an intermittent fault on Microsoft's side for personal Outlook accounts: try again in a moment.`;
+      }
+      // Which login mechanisms the server offered: the first thing to know when it refuses a token.
+      if (e instanceof Error) {
+        err.serverAuth = [...client.capabilities.keys()].filter((c) => /^AUTH=|^SASL-IR$/.test(c)).join(' ');
+      }
+      throw e;
+    } finally {
+      clearTimeout(deadline);
+      if (client.usable) await client.logout().catch(() => client.close());
+      else client.close();
     }
-    throw e;
-  } finally {
-    clearTimeout(deadline);
-    if (client.usable) await client.logout().catch(() => client.close());
-    else client.close();
   }
 }
 

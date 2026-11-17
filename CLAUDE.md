@@ -96,8 +96,12 @@ The shared app is registered in Microsoft Entra (multitenant + personal accounts
 lives in the maintainer's tenant) and its id is `DEFAULT_CLIENT_ID` in `src/oauth.ts`; Microsoft's
 device-code endpoint accepts it for `consumers` and `organizations`. GreenMail has no XOAUTH2, so `test/oauth.test.ts` uses a fake IMAP server.
 Real tries so far: a university Microsoft 365 tenant stops at "Need admin approval"; a personal
-outlook.es mailbox gets a token but IMAP answers `AUTHENTICATE failed` with IMAP enabled (OPEN, cause
-unknown). On that refusal the CLI prints a "Details" line (server reply, mechanisms offered, tenant,
+outlook.es mailbox signs in correctly and then IMAP answers `NO User is authenticated but not
+connected.` This is a Microsoft-side intermittent fault on consumer mailboxes (reported since
+2026-09 with every client, ~1 login in 3-5 succeeds; simonrob/email-oauth2-proxy#428). `withClient`
+retries that exact reply up to 8 times per call, only before `fn` runs. OPEN: not yet seen to succeed
+on a real mailbox; if retries are not enough, switch Microsoft personal accounts to Graph (`Mail.Read`).
+On any OAuth mailbox refusal the CLI prints a "Details" line (server reply, mechanisms offered, tenant,
 granted scope, token kind, signed-in address): ask for that line before guessing. Scope also carries
 `openid profile` only to learn who signed in.
 See ROADMAP.md "v0.5" for what is left and what to confirm in the real test.

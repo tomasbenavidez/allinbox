@@ -46,12 +46,15 @@ Left:
 2. Real-account test, in progress:
    - University Microsoft 365 tenant: got through the device-code page and stopped at Microsoft's
      "Need admin approval" screen (app shown as unverified).
-   - Personal outlook.es mailbox: sign-in and consent work and a token is issued, but the IMAP
-     server answers `AUTHENTICATE failed` with IMAP switched on (the setting is where the error
-     message says: Settings > Mail > Forwarding and IMAP). **Open.** The CLI now prints what the
-     server said, what was granted and who signed in; next step is reading that line. Suspects:
-     a new mailbox or a just-enabled IMAP setting that has not propagated, a sign-in with another
-     Microsoft account, or the `consumers` tenant (try `ALLINBOX_MS_TENANT=common`).
+   - Personal outlook.es mailbox (one day old): sign-in, consent, scope and identity are all correct
+     (the server offers XOAUTH2 and names the right user), then IMAP answers
+     `NO User is authenticated but not connected.` on every one of ~8 logins. This is Microsoft's:
+     the same reply is reported since September 2026 for personal accounts with Thunderbird's own
+     client id, any token and any client, succeeding about 1 time in 3 to 5
+     (simonrob/email-oauth2-proxy#428, still open). `withClient` now retries that reply up to 8
+     times per call. **Open:** whether retries are enough on a real mailbox.
+   - If they are not, IMAP is the wrong transport for personal Microsoft accounts and the Graph
+     option below stops being optional.
 
    Still to confirm once a login succeeds:
    special-use `\Drafts` detection, `TEXT` search speed, the wording of the IMAP setting in outlook.com.

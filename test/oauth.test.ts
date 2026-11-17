@@ -169,11 +169,16 @@ test('friendlyError: Microsoft failures point at the real cause, not at app pass
   assert.match(friendlyError({ authenticationFailed: true }, { host: 'h', port: 993 }).en, /APP password/);
 });
 
-test('withClient logs in to an OAuth account with XOAUTH2 (user + bearer token), never LOGIN', async () => {
+/**
+ * Just enough IMAP for a login: GreenMail has no XOAUTH2, and this is the part Microsoft checks.
+ * Tokens: "good-token" logs in; "flaky-token" is refused twice the way Outlook does, then logs in;
+ * "stuck-token" is always refused that way; anything else is a plain refusal.
+ */
+async function fakeOutlook() {
   const { createServer } = await import('node:net');
-  const { withClient } = await import('../src/imap.ts');
   const seen: string[] = [];
-  // Just enough IMAP for a login: GreenMail has no XOAUTH2, and this is the part Microsoft checks.
+  const bearer = (token: string) => `user=ana@outlook.com\x01auth=Bearer ${token}\x01\x01`;
+  let flakyLeft = 2;
   const server = createServer((socket) => {
     socket.write('* OK ready\r\n');
     let buffer = '';
@@ -187,8 +192,10 @@ test('withClient logs in to an OAuth account with XOAUTH2 (user + bearer token),
         if (/^CAPABILITY$/i.test(command)) socket.write('* CAPABILITY IMAP4rev1 AUTH=XOAUTH2 SASL-IR\r\n'); // what Outlook advertises
         if (/^AUTHENTICATE$/i.test(command)) {
           const sasl = Buffer.from(args[1] ?? '', 'base64').toString();
-          const good = sasl === 'user=ana@outlook.com\x01auth=Bearer good-token\x01\x01';
-          socket.write(good ? `${tag} OK AUTHENTICATE completed.\r\n` : `${tag} NO AUTHENTICATE failed.\r\n`);
+          const notConnected = sasl === bearer('stuck-token') || (sasl === bearer('flaky-token') && flakyLeft-- > 0);
+          if (notConnected) socket.write(`${tag} NO User is authenticated but not connected.\r\n`);
+          else if (sasl === bearer('good-token') || sasl === bearer('flaky-token')) socket.write(`${tag} OK AUTHENTICATE completed.\r\n`);
+          else socket.write(`${tag} NO AUTHENTICATE failed.\r\n`);
         } else socket.write(`${tag} OK done\r\n`);
       }
     });
@@ -197,17 +204,47 @@ test('withClient logs in to an OAuth account with XOAUTH2 (user + bearer token),
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address() as { port: number };
   const local: Account = { ...account, host: '127.0.0.1', port, secure: false };
+  const logins = () => seen.filter((c) => c.startsWith('AUTHENTICATE XOAUTH2 ')).length;
+  return { local, seen, logins, close: () => server.close() };
+}
+
+test('withClient logs in to an OAuth account with XOAUTH2 (user + bearer token), never LOGIN', async () => {
+  const { withClient } = await import('../src/imap.ts');
+  const { local, seen, logins, close } = await fakeOutlook();
   try {
     assert.equal(await withClient(local, async () => 'in', 'good-token'), 'in');
-    assert.ok(seen.some((c) => c.startsWith('AUTHENTICATE XOAUTH2 ')));
+    assert.equal(logins(), 1);
     assert.ok(!seen.some((c) => /^LOGIN/i.test(c)));
     // A token for another mailbox: the server's refusal becomes the "signed in as someone else?" hint.
     const refused = await withClient(local, async () => 'in', 'other-token').catch((e: unknown) => e);
     assert.match(friendlyError(refused, local).en, /signed in as ana@outlook\.com/);
+    assert.equal(logins(), 2); // a plain refusal is final: no retry
     // ...and carries what the server offered, for the details line of a bug report.
     assert.equal((refused as { serverAuth?: string }).serverAuth, 'AUTH=XOAUTH2 SASL-IR');
   } finally {
-    server.close();
+    close();
+  }
+});
+
+test('withClient rides out Outlook\'s random "authenticated but not connected", and says so when it cannot', async () => {
+  const { withClient } = await import('../src/imap.ts');
+  const { local, logins, close } = await fakeOutlook();
+  try {
+    let ran = 0;
+    assert.equal(await withClient(local, async () => ++ran, 'flaky-token'), 1);
+    assert.equal(logins(), 3); // refused twice, third connection got in
+    assert.equal(ran, 1); // the work itself ran once
+
+    const stuck = await withClient(local, async () => ++ran, 'stuck-token').catch((e: unknown) => e);
+    assert.equal(logins(), 3 + 8); // bounded
+    assert.equal(ran, 1); // never reached the work
+    assert.match((stuck as Error).message, /refused to open the mailbox 8 times in a row/);
+    // The user is told it is Microsoft's fault, not sent to check their settings or app passwords.
+    const hint = friendlyError(stuck, local);
+    assert.match(hint.en, /fault on Microsoft's side/);
+    assert.doesNotMatch(hint.en, /signed in as|APP password/);
+  } finally {
+    close();
   }
 });
 
