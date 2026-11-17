@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>allinbox setup</title>
+<style>
+  /* Same quiet, host-native look as the inbox view. */
+  :root {
+    color-scheme: light dark;
+    --bg: var(--color-background-primary, #ffffff);
+    --bg-2: var(--color-background-secondary, #f5f4ef);
+    --fg: var(--color-text-primary, #1f1e1d);
+    --fg-2: var(--color-text-secondary, #5e5d59);
+    --fg-3: var(--color-text-tertiary, #8f8d87);
+    --line: var(--color-border-tertiary, rgba(31, 30, 29, .1));
+    --line-2: var(--color-border-secondary, rgba(31, 30, 29, .18));
+    --ring: var(--color-ring-primary, #2c84db);
+    --ok: var(--color-text-success, #2e7d4f);
+    --err: var(--color-text-danger, #b3261e);
+    --warn: var(--color-text-warning, #9a5b00);
+    --sans: var(--font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif);
+    --r-sm: var(--border-radius-sm, 6px);
+    --r-md: var(--border-radius-md, 8px);
+  }
+  :root[data-theme="dark"] {
+    --bg: var(--color-background-primary, #262624);
+    --bg-2: var(--color-background-secondary, #30302e);
+    --fg: var(--color-text-primary, #f5f4ef);
+    --fg-2: var(--color-text-secondary, #b8b6ae);
+    --fg-3: var(--color-text-tertiary, #8a8880);
+    --line: var(--color-border-tertiary, rgba(245, 244, 239, .09));
+    --line-2: var(--color-border-secondary, rgba(245, 244, 239, .16));
+    --ok: var(--color-text-success, #8fd1a8);
+    --err: var(--color-text-danger, #f2b8b5);
+    --warn: var(--color-text-warning, #e0a85a);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: transparent; }
+  body { font: 14px/1.45 var(--sans); color: var(--fg); -webkit-font-smoothing: antialiased; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .app { background: var(--bg); padding-bottom: 4px; }
+
+  .head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 10px; color: var(--fg-3); font-size: 12.5px; }
+  .head b { color: var(--fg-2); font-weight: 600; }
+  section { padding: 10px 14px 12px; border-top: 1px solid var(--line); }
+  h2 { font-size: 12.5px; font-weight: 600; color: var(--fg-3); margin: 0 0 8px; }
+  .accounts { list-style: none; margin: 0; padding: 0; }
+  .accounts li { display: flex; align-items: center; gap: 8px; padding: 3px 0; overflow-wrap: anywhere; }
+  .accounts .check { color: var(--ok); }
+  .muted { color: var(--fg-3); }
+  .small { font-size: 12.5px; }
+  .row { display: flex; gap: 6px; }
+  input[type=email] { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: var(--r-md); background: transparent; color: var(--fg); }
+  input[type=email]:focus { outline: 0; border-color: var(--ring); }
+  .btn { height: 32px; padding: 0 12px; border-radius: var(--r-md); border: 1px solid var(--line-2); background: var(--bg); font-size: 13px; color: var(--fg); white-space: nowrap; }
+  .btn:hover { border-color: var(--fg-3); }
+  .btn.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  .btn:disabled { opacity: .55; cursor: default; }
+  .link { border: 0; background: none; padding: 0; color: var(--fg-2); text-decoration: underline; text-underline-offset: 2px; font-size: 13px; }
+  .link:hover { color: var(--fg); }
+
+  .provider { margin: 12px 0 4px; font-weight: 600; }
+  .steps { list-style: none; margin: 0; padding: 0; counter-reset: s; }
+  .steps li { position: relative; padding: 10px 0 10px 30px; border-top: 1px solid var(--line); counter-increment: s; }
+  .steps li:first-child { border-top: 0; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 10px; width: 20px; height: 20px; border-radius: 50%;
+                      border: 1px solid var(--line-2); display: grid; place-items: center; font-size: 11.5px; color: var(--fg-3); }
+  .steps li.done::before { content: "✓"; color: var(--ok); border-color: var(--ok); }
+  .step-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .step-t { font-weight: 500; }
+  .step-d { color: var(--fg-2); font-size: 13px; margin-top: 3px; }
+  .status { margin-top: 8px; font-size: 13px; }
+  .status.ok { color: var(--ok); } .status.err { color: var(--err); } .status.wait { color: var(--fg-2); }
+  .warn { color: var(--warn); font-size: 13px; margin: 4px 0 8px; }
+  .url { font-size: 12px; color: var(--fg-3); overflow-wrap: anywhere; margin-top: 6px; user-select: all; }
+  .foot { display: flex; gap: 6px; padding: 8px 14px; color: var(--fg-3); font-size: 11.5px; border-top: 1px solid var(--line); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="head">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+    <span><b>allinbox</b> · <span id="title"></span></span>
+  </div>
+
+  <section>
+    <h2 id="h-accounts"></h2>
+    <ul class="accounts" id="accounts"></ul>
+    <div class="small muted" id="drafts"></div>
+    <button class="link" id="manage" type="button" style="margin-top:8px"></button>
+    <div class="status" id="manage-status"></div>
+  </section>
+
+  <section>
+    <h2 id="h-add"></h2>
+    <form class="row" id="add">
+      <input id="email" type="email" required autocomplete="off" spellcheck="false">
+      <button class="btn primary" id="go" type="submit"></button>
+    </form>
+    <div class="status err" id="add-error"></div>
+    <div id="flow" class="hidden">
+      <div class="provider" id="provider"></div>
+      <div class="warn hidden" id="warning"></div>
+      <ol class="steps" id="steps"></ol>
+    </div>
+  </section>
+
+  <div class="foot">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="flex:none;margin-top:2px"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    <span id="foot"></span>
+  </div>
+</div>
+<script>
+(() => {
+  'use strict';
+  const STR = {
+    en: {
+      title: 'Accounts', accounts: 'Connected', none: 'No accounts yet.', add: 'Add an account',
+      placeholder: 'you@example.com', next: 'Continue', manage: 'Manage accounts and drafts',
+      draftsOn: (l) => `Drafts on · only to ${l}`, draftsOff: 'Drafts off (read-only)',
+      unknown: 'Provider not recognized: the secure page will ask for its IMAP host and port.',
+      s2fa: 'Turn on 2-Step Verification', s2faD: 'App passwords only exist once it is on. Skip if you already have it.',
+      sApp: 'Create an app password', sAppD: 'A separate password just for allinbox, revocable anytime.',
+      sPaste: 'Paste it in the secure window', sPasteD: 'A page opens in your browser, on this computer only. allinbox tests the login, then saves it in your system keychain.',
+      sCustom: 'Enter your server and password in the secure window',
+      open: 'Open', openSecure: 'Open secure window', again: 'Open again',
+      waiting: 'Waiting for you in the browser…', testing: 'Testing the login…',
+      connected: (e) => `✓ ${e} connected. It is already included in searches.`,
+      expired: 'The secure link expired. Open it again.', saved: '✓ Saved.',
+      manualUrl: 'If nothing opened, paste this in your browser:',
+      tryIt: 'Search all my email', ask: 'Show me my latest email across all my accounts.',
+      foot: 'Passwords never go through the chat: they are typed in a local page and stored in your system keychain.',
+      demo: 'Demo mode: nothing is saved for real. Any password works except "wrong".',
+    },
+    es: {
+      title: 'Cuentas', accounts: 'Conectadas', none: 'Todavía no hay cuentas.', add: 'Agregar una cuenta',
+      placeholder: 'vos@ejemplo.com', next: 'Continuar', manage: 'Administrar cuentas y borradores',
+      draftsOn: (l) => `Borradores activados · solo a ${l}`, draftsOff: 'Borradores apagados (solo lectura)',
+      unknown: 'No reconozco el proveedor: la página segura te va a pedir el host y puerto IMAP.',
+      s2fa: 'Activá la verificación en 2 pasos', s2faD: 'Las contraseñas de aplicación solo existen con eso activo. Salteá si ya la tenés.',
+      sApp: 'Creá una contraseña de aplicación', sAppD: 'Una contraseña aparte, solo para allinbox, que podés revocar cuando quieras.',
+      sPaste: 'Pegala en la ventana segura', sPasteD: 'Se abre una página en tu navegador, solo en esta compu. allinbox prueba el login y la guarda en el llavero del sistema.',
+      sCustom: 'Poné tu servidor y contraseña en la ventana segura',
+      open: 'Abrir', openSecure: 'Abrir ventana segura', again: 'Abrir de nuevo',
+      waiting: 'Esperándote en el navegador…', testing: 'Probando el login…',
+      connected: (e) => `✓ ${e} conectada. Ya entra en las búsquedas.`,
+      expired: 'El link seguro venció. Abrilo de nuevo.', saved: '✓ Guardado.',
+      manualUrl: 'Si no se abrió nada, pegá esto en tu navegador:',
+      tryIt: 'Buscar en todas mis casillas', ask: 'Mostrame mis últimos mails de todas mis cuentas.',
+      foot: 'Las contraseñas nunca pasan por el chat: se escriben en una página local y van al llavero del sistema.',
+      demo: 'Modo demo: no se guarda nada de verdad. Sirve cualquier contraseña menos "wrong".',
+    },
+  };
+  let lang = 'en';
+  const t = (k, ...a) => { const v = STR[lang][k]; return typeof v === 'function' ? v(...a) : v; };
+  const L = (l) => (l ? l[lang] || l.en : '');
+
+  // ---------- MCP Apps bridge (JSON-RPC 2.0 over postMessage) ----------
+  const host = window.parent;
+  let seq = 0;
+  const pending = new Map();
+  const post = (msg) => host.postMessage({ jsonrpc: '2.0', ...msg }, '*');
+  const notify = (method, params = {}) => post({ method, params });
+  const request = (method, params = {}) => new Promise((resolve, reject) => {
+    const id = ++seq;
+    pending.set(id, { resolve, reject });
+    post({ id, method, params });
+    setTimeout(() => { if (pending.delete(id)) reject(new Error('timeout')); }, 60000);
+  });
+  window.addEventListener('message', (e) => {
+    if (e.source !== host) return;
+    const m = e.data;
+    if (!m || m.jsonrpc !== '2.0') return;
+    if (m.method) {
+      if (m.method === 'ui/notifications/tool-input') { const em = m.params?.arguments?.email; if (em && !$('email').value) $('email').value = em; }
+      else if (m.method === 'ui/notifications/host-context-changed') applyContext(m.params || {});
+      if (m.id !== undefined) post({ id: m.id, result: {} });
+    } else if (m.id !== undefined && pending.has(m.id)) {
+      const p = pending.get(m.id); pending.delete(m.id);
+      m.error ? p.reject(new Error(m.error.message || 'error')) : p.resolve(m.result);
+    }
+  });
+  const textOf = (r) => (r?.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('\n');
+  async function call(name, args = {}) {
+    const r = await request('tools/call', { name, arguments: args });
+    if (r?.isError) throw new Error(textOf(r));
+    return JSON.parse(textOf(r));
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  let ctx = {};
+  function applyContext(c) {
+    ctx = { ...ctx, ...c };
+    if (ctx.theme) document.documentElement.dataset.theme = ctx.theme;
+    const vars = ctx.styles?.variables;
+    if (vars) for (const [k, v] of Object.entries(vars)) if (v) document.documentElement.style.setProperty(k, v);
+    if (ctx.locale) lang = String(ctx.locale).toLowerCase().startsWith('es') ? 'es' : 'en';
+    document.documentElement.lang = lang;
+    staticText();
+    renderState();
+  }
+
+  // ---------- State ----------
+  const S = { state: null, info: null, url: null, poll: null, mode: null, opened: {} };
+
+  function staticText() {
+    $('title').textContent = t('title');
+    $('h-accounts').textContent = t('accounts');
+    $('h-add').textContent = t('add');
+    $('email').placeholder = t('placeholder');
+    $('go').textContent = t('next');
+    $('manage').textContent = t('manage');
+    $('foot').textContent = S.state?.demo ? `${t('foot')} ${t('demo')}` : t('foot');
+  }
+
+  function renderState() {
+    const st = S.state;
+    if (!st) return resize();
+    const ul = $('accounts'); ul.replaceChildren();
+    if (!st.accounts.length) ul.append(el('li', 'muted', t('none')));
+    for (const a of st.accounts) { const li = el('li'); li.append(el('span', 'check', '✓'), el('span', null, a)); ul.append(li); }
+    $('drafts').textContent = st.drafts.enabled ? t('draftsOn', st.drafts.allowRecipients.join(', ')) : t('draftsOff');
+    staticText();
+    renderFlow();
+    resize();
+  }
+
+  function stepButton(label, onClick, primary) {
+    const b = el('button', 'btn' + (primary ? ' primary' : ''), label); b.type = 'button'; b.onclick = onClick; return b;
+  }
+  const openLink = (url) => request('ui/open-link', { url }).catch(() => {});
+
+  function renderFlow() {
+    const info = S.info;
+    $('flow').classList.toggle('hidden', !info);
+    if (!info) return;
+    $('provider').textContent = info.known ? info.label : info.email;
+    $('warning').classList.toggle('hidden', !info.warning);
+    $('warning').textContent = L(info.warning);
+    const steps = $('steps'); steps.replaceChildren();
+    const step = (title, desc, action, done) => {
+      const li = el('li', done ? 'done' : '');
+      const h = el('div', 'step-h'); h.append(el('span', 'step-t', title));
+      if (action) h.append(action);
+      li.append(h);
+      if (desc) li.append(el('div', 'step-d', desc));
+      steps.append(li);
+      return li;
+    };
+    if (!info.known) {
+      steps.append(Object.assign(el('div', 'step-d', t('unknown')), { style: 'margin-bottom:6px' }));
+    }
+    if (info.twoStep) {
+      step(t('s2fa'), `${t('s2faD')} ${L(info.twoStep.symptom)}`, stepButton(t('open'), () => { S.opened.twoStep = true; openLink(info.twoStep.url); renderFlow(); }), S.opened.twoStep);
+    }
+    if (info.appPassword) {
+      step(t('sApp'), `${L(info.appPassword.steps)} ${t('sAppD')}`, stepButton(t('open'), () => { S.opened.app = true; openLink(info.appPassword.url); renderFlow(); }), S.opened.app);
+    }
+    const status = S.state?.status;
+    const isAdd = status?.mode === 'add' && status?.email === info.email;
+    const connected = isAdd && status.state === 'connected';
+    const last = step(info.appPassword ? t('sPaste') : t('sCustom'), t('sPasteD'),
+      connected ? null : stepButton(S.url ? t('again') : t('openSecure'), () => openSecure('add', info.email), true), connected);
+    if (isAdd) {
+      const line = el('div', 'status');
+      if (status.state === 'waiting') { line.className = 'status wait'; line.textContent = t('waiting'); }
+      if (status.state === 'testing') { line.className = 'status wait'; line.textContent = t('testing'); }
+      if (status.state === 'failed') { line.className = 'status err'; line.textContent = status.message || ''; }
+      if (status.state === 'expired') { line.className = 'status err'; line.textContent = t('expired'); }
+      if (connected) { line.className = 'status ok'; line.textContent = t('connected', info.email); }
+      last.append(line);
+      if (S.url && !connected && status.state !== 'expired') last.append(el('div', 'url', `${t('manualUrl')} ${S.url}`));
+      if (connected) {
+        const b = stepButton(t('tryIt'), async () => { b.disabled = true; await request('ui/message', { role: 'user', content: [{ type: 'text', text: t('ask') }] }).catch(() => {}); });
+        b.style.marginTop = '8px'; last.append(b);
+      }
+    }
+  }
+
+  async function refresh() {
+    try { S.state = await call('setup_state'); } catch {}
+    renderState();
+    const st = S.state?.status?.state;
+    // Poll only while a secure page is open (it expires after 15 minutes).
+    if (st === 'waiting' || st === 'testing' || st === 'failed' || st === 'saved') schedule(); else stopPoll();
+    if (S.mode === 'manage') manageStatus();
+  }
+  function schedule() { if (!S.poll) S.poll = setInterval(refresh, 2000); }
+  function stopPoll() { clearInterval(S.poll); S.poll = null; }
+  function manageStatus() {
+    const st = S.state?.status;
+    $('manage-status').className = 'status ' + (st?.state === 'saved' ? 'ok' : st?.state === 'expired' ? 'err' : 'wait');
+    $('manage-status').textContent = st?.mode !== 'manage' ? '' : st.state === 'saved' ? t('saved') : st.state === 'expired' ? t('expired') : st.state === 'waiting' ? t('waiting') : '';
+  }
+
+  async function openSecure(mode, email) {
+    S.mode = mode;
+    try {
+      const { url } = await call('setup_open', { mode, email, lang });
+      S.url = mode === 'add' ? url : S.url;
+      if (mode === 'manage') { S.manageUrl = url; }
+      await refresh();
+      if (mode === 'manage') manageStatus();
+      schedule();
+    } catch (e) {
+      (mode === 'add' ? $('add-error') : $('manage-status')).textContent = e.message;
+      $('manage-status').className = 'status err';
+    }
+  }
+
+  $('add').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('add-error').textContent = '';
+    $('go').disabled = true;
+    try { S.info = await call('setup_detect', { email: $('email').value.trim() }); S.url = null; S.opened = {}; }
+    catch (err) { S.info = null; $('add-error').textContent = err.message; }
+    $('go').disabled = false;
+    renderState();
+  });
+  $('manage').addEventListener('click', () => openSecure('manage'));
+
+  let lastH = 0;
+  function resize() {
+    requestAnimationFrame(() => {
+      const h = Math.ceil($('app').getBoundingClientRect().height);
+      if (h !== lastH) { lastH = h; notify('ui/notifications/size-changed', { height: h }); }
+    });
+  }
+  new ResizeObserver(resize).observe($('app'));
+
+  staticText();
+  request('ui/initialize', {
+    appInfo: { name: 'allinbox-setup', version: '__VERSION__' },
+    appCapabilities: {},
+    protocolVersion: '2026-01-26',
+  }).then((r) => {
+    applyContext(r?.hostContext || {});
+    notify('ui/notifications/initialized');
+    refresh();
+  }).catch(() => {});
+})();
+</script>
+</body>
+</html>

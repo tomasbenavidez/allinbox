@@ -90,6 +90,7 @@ One `search_all` call fans out to every account in parallel. A slow account time
 | `search_all` | One query across every account. `query`, `since_days` (30), `limit` (25), optional `accounts` |
 | `read_email` | One message by id, cleaned. `max_chars` (4000) |
 | `read_thread` | The whole conversation, oldest first, in one call. `max_chars` (8000) |
+| `setup_accounts` | Shows the setup assistant in the chat (MCP Apps clients): connect or remove accounts, turn drafts on. Passwords go in a local browser page, never in the chat |
 | `create_draft` | **Only if you enabled drafts.** Saves to your Drafts folder and **never sends**. `reply_to_id` threads it |
 
 On Gmail, `query` accepts Gmail search syntax (`from:ana has:attachment`).

@@ -1,13 +1,11 @@
 // Interactive, bilingual setup: accounts -> drafts opt-in -> connect agents.
 import { createInterface, type Interface } from 'node:readline';
-import { spawn } from 'node:child_process';
-import { platform } from 'node:os';
 import { stdin, stdout } from 'node:process';
 import { styleText } from 'node:util';
 import { Writable } from 'node:stream';
 import { loadConfig, saveConfig, setPassword, type Account, type Config } from './config.js';
-import { resolveMx } from 'node:dns/promises';
-import { presetFor, presetForMx, type Preset } from './providers.js';
+import { detectProvider, type Preset } from './providers.js';
+import { openUrl } from './open.js';
 import { searchAccount } from './imap.js';
 import { AGENTS, type InstallResult } from './agents.js';
 import { tr, isYes, type L } from './i18n.js';
@@ -73,15 +71,6 @@ async function confirm(l: L, fallback: boolean): Promise<boolean> {
   return isYes(await ask(`${tr(l)} ${hint} `), fallback);
 }
 
-// explorer.exe on Windows (not `cmd /c start`): the URL carries an email, and cmd would parse & ^ %.
-// The URL is always printed too, so a missing opener (headless Linux) only costs a copy-paste.
-function openUrl(url: string): void {
-  const opener = platform() === 'win32' ? 'explorer.exe' : platform() === 'darwin' ? 'open' : 'xdg-open';
-  const child = spawn(opener, [url], { stdio: 'ignore', detached: true });
-  child.on('error', () => {});
-  child.unref();
-}
-
 /** Turn IMAP/network errors into something a non-developer can act on. */
 export function friendlyError(e: unknown, account: Pick<Account, 'host' | 'port'>): L {
   const err = e as { authenticationFailed?: boolean; code?: string; responseText?: string; message?: string };
@@ -102,18 +91,6 @@ export function friendlyError(e: unknown, account: Pick<Account, 'host' | 'port'
     };
   }
   return { en: `Connection failed: ${text.trim()}`, es: `Falló la conexión: ${text.trim()}` };
-}
-
-async function detectByMx(domain: string): Promise<Preset | undefined> {
-  try {
-    const records = await Promise.race([
-      resolveMx(domain),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('mx timeout')), 5000).unref()),
-    ]);
-    return presetForMx(records.map((r) => r.exchange));
-  } catch {
-    return undefined; // no MX or no network: fall back to asking for host/port
-  }
 }
 
 /** Opens the right pages in the browser by itself; the user only copies and pastes. */
@@ -165,7 +142,7 @@ export async function addAccount(existing: Account[]): Promise<Account | null> {
   }
 
   const domain = email.split('@')[1];
-  const preset = presetFor(email) ?? (await detectByMx(domain));
+  const preset = await detectProvider(email);
   let host = preset?.host ?? '';
   let port = preset?.port ?? 993;
   if (preset) {

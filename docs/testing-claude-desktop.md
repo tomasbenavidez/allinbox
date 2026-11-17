@@ -56,7 +56,22 @@ Open `%APPDATA%\Claude\logs\mcp-server-allinbox-demo.log` (macOS: `~/Library/Log
 - `inbox view requested by the client`: Claude fetched the view. If this line is there but nothing
   renders, open the developer tools (if enabled) and look for errors from the `ui://allinbox` frame.
 
-## 5. Real accounts
+## 5. Setup from the chat
+
+Ask: **"Add my Gmail account"**. Claude calls `setup_accounts` and the setup assistant appears:
+
+| Check | Expected |
+|---|---|
+| Type an address, Continue | Provider detected, with steps for 2-Step Verification and the app password |
+| "Open" on each step | The provider's page opens (Google pages open signed in as that address) |
+| "Open secure window" | A `127.0.0.1` page opens in your browser and the chat shows "Waiting for you in the browser…" |
+| Wrong password (in demo: `wrong`) | The page explains the error, nothing is saved |
+| Right password | Page says connected; the chat updates by itself and the account is already searchable |
+| "Manage accounts and drafts" | Local page to remove accounts and set the drafts allowlist; `create_draft` appears or disappears without restarting |
+
+In `--demo` nothing touches your keychain or `~/.allinbox`.
+
+## 6. Real accounts
 
 ```bash
 node dist/cli.js connect

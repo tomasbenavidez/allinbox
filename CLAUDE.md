@@ -18,10 +18,12 @@ TypeScript (tsc 7) · Node >= 20.12 · `@modelcontextprotocol/sdk` · `imapflow`
 | File | Role |
 |---|---|
 | `src/cli.ts` | Entry. No args: TTY → onboarding, piped → MCP server. `serve` forces server. |
-| `src/server.ts` | MCP tools: `list_accounts`, `search_all`, `read_email`, `read_thread`, `create_draft` (only if drafts enabled). |
+| `src/server.ts` | MCP tools: `list_accounts`, `search_all`, `read_email`, `read_thread`, `create_draft` (listed only while drafts are on), `setup_accounts` (+ app-only `setup_state`/`setup_detect`/`setup_open`). Config is live: setup changes apply without restarting the agent. |
 | `src/imap.ts` | IMAP: `withClient` (timeouts, error listener), search, read, thread. |
 | `src/drafts.ts` | Draft via IMAP APPEND to `\Drafts`; recipient allowlist. |
 | `src/view.ts`, `src/view.html` | MCP Apps inbox view (`ui://allinbox/inbox.html`) linked from `search_all`. One self-contained HTML file, copied to dist by `scripts/copy-view.mjs`. |
+| `src/setup.ts`, `src/setup.html` | Setup from the chat: the view guides (provider, 2-step, app password links); a one-time page on 127.0.0.1 takes the password, tests it and stores it. |
+| `src/open.ts` | `openUrl` (explorer.exe on Windows). |
 | `src/demo.ts` | `serve --demo`: fictional mailboxes behind the same backend interface as IMAP (agent/UI testing, demo recordings). |
 | `src/clean.ts` | Pure: `cleanBody`, `mergeHits` (dedupe by Message-ID), `formatHits`, `normalizeSubject`. |
 | `src/onboarding.ts` | Bilingual guided setup: accounts → drafts opt-in → connect agents. |
@@ -44,6 +46,11 @@ TypeScript (tsc 7) · Node >= 20.12 · `@modelcontextprotocol/sdk` · `imapflow`
   channel), renders email with `textContent` only (a test bans innerHTML), loads nothing external (CSP
   empty), and never writes: actions go to the agent via `ui/message`. Minimal look built only from
   the host's style variables (colors, fonts, radii), so it blends into the chat.
+- Setup trust model: secrets and trust changes (app passwords, removing accounts, the drafts allowlist)
+  happen ONLY on the local page (127.0.0.1, random port, one-time token, Host + Origin checks,
+  15 min expiry, `Referrer-Policy: same-origin` so browsers send a real Origin). Never through MCP
+  tool arguments: they could reach the model or a chat transcript, and a prompt-injected model must
+  have no tool that changes configuration. App-only setup tools are read-only/harmless by design.
 
 ## Key decisions
 - **IMAP + app passwords, not Gmail OAuth**: Google's restricted Gmail scopes need a paid yearly

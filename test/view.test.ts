@@ -20,7 +20,9 @@ test('search_all links the MCP Apps inbox view; other tools stay plain', async (
   const search = tools.find((t) => t.name === 'search_all')!;
   assert.deepEqual(search._meta?.ui, { resourceUri: VIEW_URI });
   assert.equal(search._meta?.['ui/resourceUri'], VIEW_URI);
-  assert.ok(tools.filter((t) => t.name !== 'search_all').every((t) => !t._meta?.ui));
+  const plain = ['list_accounts', 'read_email', 'read_thread'];
+  assert.ok(tools.filter((t) => plain.includes(t.name)).every((t) => !t._meta?.ui));
+  assert.ok(!tools.some((t) => t.name === 'create_draft')); // drafts off: not listed at all
   await client.close();
 });
 

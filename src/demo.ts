@@ -5,6 +5,9 @@ import type { Account, Config } from './config.js';
 import type { Hit } from './clean.js';
 import { mergeHits } from './clean.js';
 import type { SearchAllResult, SearchOptions } from './imap.js';
+import type { SetupDeps } from './setup.js';
+import { openUrl } from './open.js';
+import { friendlyError } from './onboarding.js';
 
 interface DemoMail extends Hit {
   to: string;
@@ -73,3 +76,22 @@ export const demoMail = {
   },
 };
 export type MailBackend = typeof demoMail;
+
+/**
+ * Setup in demo mode: the local page and the whole flow are real, but nothing touches the
+ * keychain or ~/.allinbox. Any password works except "wrong" (to see the error path).
+ */
+export function demoSetup(initial: Config, open: (url: string) => void = openUrl): SetupDeps {
+  let stored: Config = structuredClone(initial);
+  return {
+    loadConfig: async () => structuredClone(stored),
+    saveConfig: async (c) => void (stored = structuredClone(c)),
+    testLogin: async (_account, password) => {
+      if (!password || password === 'wrong') throw Object.assign(new Error('Invalid credentials'), { authenticationFailed: true });
+    },
+    setPassword: () => {},
+    deletePassword: () => {},
+    openUrl: open,
+    friendlyError,
+  };
+}

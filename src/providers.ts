@@ -1,3 +1,4 @@
+import { resolveMx } from 'node:dns/promises';
 import type { L } from './i18n.js';
 
 export interface Preset {
@@ -104,4 +105,19 @@ export function presetForMx(exchanges: string[]): Preset | undefined {
   }
   if (mx.some((e) => e.endsWith('.protection.outlook.com'))) return { ...outlook, label: 'Microsoft 365' };
   return undefined;
+}
+
+/** Known domain first, then the domain's MX records (5 s cap). Undefined = ask for host/port. */
+export async function detectProvider(email: string): Promise<Preset | undefined> {
+  const known = presetFor(email);
+  if (known) return known;
+  try {
+    const records = await Promise.race([
+      resolveMx(email.split('@')[1] ?? ''),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('mx timeout')), 5000).unref()),
+    ]);
+    return presetForMx(records.map((r) => r.exchange));
+  } catch {
+    return undefined; // no MX or no network
+  }
 }

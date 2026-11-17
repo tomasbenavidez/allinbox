@@ -16,6 +16,7 @@ const [serverSide, clientSide] = InMemoryTransport.createLinkedPair();
 await Promise.all([mcp.connect(serverSide), client.connect(clientSide)]);
 const viewHtml = async () => String((await client.readResource({ uri: 'ui://allinbox/inbox.html' })).contents[0].text);
 const VIEW_HTML = await viewHtml();
+const SETUP_HTML = String((await client.readResource({ uri: 'ui://allinbox/setup.html' })).contents[0].text);
 
 const page = `<!doctype html><html><head><meta charset="utf-8"><title>allinbox · MCP Apps preview</title>
 <style>
@@ -35,7 +36,7 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>allinbox �
 <div class="bar"><b>MCP Apps preview</b>
   <button id="theme">Toggle dark</button>
   <select id="locale"><option value="es-AR">es-AR</option><option value="en-US">en-US</option></select>
-  <button id="q1">Ask: invoice</button><button id="q2">Ask: latest 30d</button><button id="q3">Ask: prize (hostile mail)</button>
+  <button id="q1">Ask: invoice</button><button id="q2">Ask: latest 30d</button><button id="q4">Ask: add account</button><button id="q3">Ask: prize (hostile mail)</button>
 </div>
 <main>
   <div class="bubble" id="ask">Buscá en todos mis mails lo último</div>
@@ -44,6 +45,8 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>allinbox �
 </main>
 <script>
 const VIEW = ${JSON.stringify(VIEW_HTML).replace(/</g, '\\u003c')};
+const SETUP = ${JSON.stringify(SETUP_HTML).replace(/</g, '\\u003c')};
+let tool = 'search_all';
 const iframe = document.getElementById('view');
 const log = (s) => { const l = document.getElementById('log'); l.textContent = s + '\\n' + l.textContent; };
 let ctx = { theme: 'light', locale: 'es-AR', timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -61,7 +64,7 @@ window.addEventListener('message', async (e) => {
         hostCapabilities: { serverTools: {}, message: { text: {} }, openLinks: {} }, hostContext: ctx });
     case 'ui/notifications/initialized':
       send({ method: 'ui/notifications/tool-input', params: { arguments: args } });
-      return setTimeout(async () => send({ method: 'ui/notifications/tool-result', params: await call('search_all', args) }), 700);
+      return setTimeout(async () => send({ method: 'ui/notifications/tool-result', params: await call(tool, args) }), 700);
     case 'ui/notifications/size-changed':
       if (ctx.displayMode === 'inline') iframe.style.height = m.params.height + 'px'; return;
     case 'tools/call': log('view → tools/call ' + JSON.stringify(m.params)); return reply(await call(m.params.name, m.params.arguments));
@@ -70,20 +73,22 @@ window.addEventListener('message', async (e) => {
       ctx.displayMode = m.params.mode; document.body.classList.toggle('fs', ctx.displayMode === 'fullscreen');
       iframe.style.height = ctx.displayMode === 'fullscreen' ? '100vh' : iframe.style.height;
       return reply({ mode: ctx.displayMode });
+    case 'ui/open-link': log('view → ui/open-link ' + m.params.url); window.open(m.params.url, '_blank'); return reply({});
     default: if (m.id !== undefined) send({ id: m.id, error: { code: -32601, message: 'not supported' } });
   }
 });
-function run(a, label) { args = a; document.getElementById('ask').textContent = label; iframe.srcdoc = VIEW; }
+function run(a, label, which = 'search_all') { tool = which; args = a; document.getElementById('ask').textContent = label; iframe.srcdoc = which === 'setup_accounts' ? SETUP : VIEW; }
 const ctxChanged = () => send({ method: 'ui/notifications/host-context-changed', params: ctx });
 document.getElementById('theme').onclick = () => { ctx.theme = ctx.theme === 'dark' ? 'light' : 'dark'; document.body.classList.toggle('dark', ctx.theme === 'dark'); ctxChanged(); };
 document.getElementById('locale').onchange = (e) => { ctx.locale = e.target.value; ctxChanged(); };
 document.getElementById('q1').onclick = () => run({ query: 'invoice', since_days: 30, limit: 25 }, 'Find my invoices this month');
 document.getElementById('q2').onclick = () => run({ since_days: 30, limit: 25 }, 'Buscá en todos mis mails lo último');
+document.getElementById('q4').onclick = () => run({}, 'Agregá mi cuenta de Gmail', 'setup_accounts');
 document.getElementById('q3').onclick = () => run({ query: 'prize', since_days: 30, limit: 25 }, 'Search: prize (prompt-injection sample)');
 const p = new URLSearchParams(location.search);
 if (p.get('theme') === 'dark') { ctx.theme = 'dark'; document.body.classList.add('dark'); }
 if (p.get('locale')) { ctx.locale = p.get('locale'); document.getElementById('locale').value = ctx.locale; }
-run(p.get('q') ? { query: p.get('q'), since_days: 30, limit: 25 } : { since_days: 30, limit: 25 }, p.get('q') ? 'Search: ' + p.get('q') : 'Buscá en todos mis mails lo último');
+if (p.get('view') === 'setup') run(p.get('email') ? { email: p.get('email') } : {}, 'Agregá mi cuenta de Gmail', 'setup_accounts'); else run(p.get('q') ? { query: p.get('q'), since_days: 30, limit: 25 } : { since_days: 30, limit: 25 }, p.get('q') ? 'Search: ' + p.get('q') : 'Buscá en todos mis mails lo último');
 </script></body></html>`;
 
 const port = Number(process.env.PORT ?? 5180);
