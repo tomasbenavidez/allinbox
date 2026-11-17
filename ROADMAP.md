@@ -43,7 +43,10 @@ Left:
 1. ~~Register the shared app in Microsoft Entra~~ Done ("Any Entra ID Tenant + Personal Microsoft
    accounts", public client flows on); its id is `DEFAULT_CLIENT_ID` in `src/oauth.ts`. Microsoft's
    device-code endpoint accepts it for both `consumers` and `organizations`.
-2. Real-account test: personal Outlook/Hotmail first, then a Microsoft 365 mailbox. To confirm there:
+2. Real-account test on a personal Outlook/Hotmail mailbox (still pending). A first try on a
+   university Microsoft 365 tenant got through the device-code page and stopped at Microsoft's
+   "Need admin approval" screen (app shown as unverified), so nothing past consent is tested yet.
+   To confirm there:
    special-use `\Drafts` detection, `TEXT` search speed, the wording of the IMAP setting in outlook.com.
 3. Then the README can announce it.
 

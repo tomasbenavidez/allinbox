@@ -203,6 +203,13 @@ export async function microsoftSignIn(account: Account): Promise<boolean> {
       console.log(`  ${styleText('cyan', device.verification_uri)}`);
       console.log(`  ${tr({ en: 'Type this code there:', es: 'Escribí ahí este código:' })} ${bold(device.user_code)}`);
       console.log(dim(`  ${tr({ en: `Then sign in as ${account.email}.`, es: `Después entrá como ${account.email}.` })}`));
+      if (oauth.tenant !== 'consumers') {
+        // Seen on a real university tenant: Microsoft stops at this screen and the code never completes.
+        console.log(dim(`  ${tr({
+          en: 'If Microsoft says "Need admin approval", your organization has to approve allinbox first: send the request from that screen, then press Ctrl+C here and run "npx allinbox add" once it is approved.',
+          es: 'Si Microsoft dice "Aprobación necesaria", tu organización tiene que aprobar allinbox primero: mandá la solicitud desde esa pantalla, apretá Ctrl+C acá y corré "npx allinbox add" cuando esté aprobada.',
+        })}`));
+      }
       stdout.write(dim(tr({ en: 'Waiting for you to finish in the browser... ', es: 'Esperando a que termines en el navegador... ' })));
       const tokens = await pollDeviceLogin(oauth, device);
       // Test first, store after: a failed retry must never overwrite a working sign-in.

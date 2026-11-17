@@ -95,6 +95,8 @@ Microsoft OAuth (branch work, 2026-11-17): code + tests done, NOT yet tested on 
 The shared app is registered in Microsoft Entra (multitenant + personal accounts, public client; it
 lives in the maintainer's tenant) and its id is `DEFAULT_CLIENT_ID` in `src/oauth.ts`; Microsoft's
 device-code endpoint accepts it for `consumers` and `organizations`. GreenMail has no XOAUTH2, so `test/oauth.test.ts` uses a fake IMAP server.
+First real try (a university Microsoft 365 tenant): device code works, then Microsoft demands admin
+approval, so the IMAP login itself is still untested. Next: a personal Outlook/Hotmail account.
 See ROADMAP.md "v0.5" for what is left and what to confirm in the real test.
 
 ## Next steps, in order

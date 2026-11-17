@@ -170,9 +170,12 @@ In progress. Microsoft no longer accepts passwords over IMAP, so these accounts 
 Microsoft's consent screen says "read and write access to your mail" because that is the only IMAP permission it offers. allinbox still opens every mailbox read-only, and it never asks for the permission to send. You can revoke access anytime at [account.microsoft.com/privacy/app-access](https://account.microsoft.com/privacy/app-access).
 
 <details>
-<summary>Work or school account blocked by your organization? Use your own app registration</summary>
+<summary>Work or school account: "Need admin approval"?</summary>
 
-An administrator can register allinbox in your organization's tenant instead of relying on the shared one:
+Many organizations do not let their users approve new apps. Microsoft then shows "Need admin approval" instead of the consent screen, and only an administrator of your organization can unblock it:
+
+- **Approve the shared app.** Send the request from that screen (administrators find it in Entra → Enterprise apps → Admin consent requests), or have an administrator sign in to allinbox once and tick "Consent on behalf of your organization".
+- **Or use your organization's own app registration**, so nothing depends on the shared one:
 
 1. [entra.microsoft.com](https://entra.microsoft.com) → App registrations → New registration. No redirect URI.
 2. Authentication → Allow public client flows → Yes.
@@ -182,7 +185,7 @@ An administrator can register allinbox in your organization's tenant instead of 
 ALLINBOX_MS_CLIENT_ID=<application-client-id> ALLINBOX_MS_TENANT=<tenant-id> npx allinbox add
 ```
 
-IMAP must also be enabled for the mailbox in Exchange Online.
+Either way, IMAP must also be enabled for the mailbox in Exchange Online.
 </details>
 
 **Gmail says "The setting you are looking for is not available for your account".**
