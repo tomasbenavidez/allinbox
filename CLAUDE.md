@@ -91,9 +91,10 @@ Demo media lives in `docs/media/` (GIF for the README, MP4 for posts); source co
 Public-repo hygiene: never commit real email addresses, account names or local paths (tests use
 fictional domains). Commits are authored with the GitHub noreply address.
 
-Microsoft OAuth (branch work, 2026-11-15): code + tests done, NOT yet tested on a real account.
-Blocked on `DEFAULT_CLIENT_ID` in `src/oauth.ts` being empty: the maintainer must register the app in
-Microsoft Entra first. GreenMail has no XOAUTH2, so `test/oauth.test.ts` uses a fake IMAP server.
+Microsoft OAuth (branch work, 2026-11-17): code + tests done, NOT yet tested on a real account.
+The shared app is registered in Microsoft Entra (multitenant + personal accounts, public client; it
+lives in the maintainer's tenant) and its id is `DEFAULT_CLIENT_ID` in `src/oauth.ts`; Microsoft's
+device-code endpoint accepts it for `consumers` and `organizations`. GreenMail has no XOAUTH2, so `test/oauth.test.ts` uses a fake IMAP server.
 See ROADMAP.md "v0.5" for what is left and what to confirm in the real test.
 
 ## Next steps, in order

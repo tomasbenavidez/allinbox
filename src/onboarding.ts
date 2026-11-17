@@ -251,15 +251,7 @@ export async function addAccount(existing: Account[]): Promise<Account | null> {
   }
 
   if (preset?.oauth) {
-    const clientId = msClientId();
-    if (!clientId) {
-      warn(tr({
-        en: 'Microsoft sign-in is not set up in this build. Set ALLINBOX_MS_CLIENT_ID to your app registration id (see README).',
-        es: 'El inicio de sesión de Microsoft no está configurado en esta versión. Definí ALLINBOX_MS_CLIENT_ID con el id de tu registro de app (ver README).',
-      }));
-      return null;
-    }
-    const oauth = { provider: preset.oauth.provider, clientId, tenant: msTenant(preset.oauth.tenant) };
+    const oauth = { provider: preset.oauth.provider, clientId: msClientId(), tenant: msTenant(preset.oauth.tenant) };
     const msAccount: Account = { id: email, email, host, port, secure: true, user: email, oauth };
     if (await microsoftSignIn(msAccount)) return msAccount;
     warn(tr({ en: `Skipped ${email}. Run "npx allinbox add" to retry.`, es: `Salteé ${email}. Corré "npx allinbox add" para reintentar.` }));

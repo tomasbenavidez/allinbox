@@ -9,7 +9,7 @@ Status of the gaps allinbox exists to close:
 | Safe writes (drafts only, never send, recipient allowlist, prompt-injection framing) | ✅ v0.2 `create_draft` (opt-in) |
 | Proof of the token savings | ⏳ v0.3 benchmark |
 | Search by meaning across years of mail | ⏳ v0.4 local index |
-| Outlook / Hotmail / Microsoft 365 accounts | 🚧 v0.5 OAuth: code done, needs the app registration and a real-account test |
+| Outlook / Hotmail / Microsoft 365 accounts | 🚧 v0.5 OAuth: code done, app registered, needs a real-account test |
 | claude.ai web + mobile | 🔬 research |
 
 ## v0.3: benchmark (the number for the launch post)
@@ -40,8 +40,9 @@ Method (checked against Microsoft's "Authenticate an IMAP, POP or SMTP connectio
 Done: `src/oauth.ts`, onboarding, `allinbox login <id>`, unit tests incl. an XOAUTH2 login against a fake IMAP server.
 
 Left:
-1. Register the shared app in Microsoft Entra ("any organizational directory and personal Microsoft
-   accounts", public client flows on) and put its id in `DEFAULT_CLIENT_ID` (`src/oauth.ts`).
+1. ~~Register the shared app in Microsoft Entra~~ Done ("Any Entra ID Tenant + Personal Microsoft
+   accounts", public client flows on); its id is `DEFAULT_CLIENT_ID` in `src/oauth.ts`. Microsoft's
+   device-code endpoint accepts it for both `consumers` and `organizations`.
 2. Real-account test: personal Outlook/Hotmail first, then a Microsoft 365 mailbox. To confirm there:
    special-use `\Drafts` detection, `TEXT` search speed, the wording of the IMAP setting in outlook.com.
 3. Then the README can announce it.

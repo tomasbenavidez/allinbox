@@ -11,7 +11,7 @@ type Fetch = typeof fetch;
  * ALLINBOX_MS_CLIENT_ID overrides it, e.g. for an organization that registers its own app.
  * The id in use is saved on each account, because refresh tokens are bound to it.
  */
-const DEFAULT_CLIENT_ID = '';
+const DEFAULT_CLIENT_ID = '496eb94e-6eb7-4a0b-834b-f7c30da464e0';
 export const msClientId = (): string => process.env.ALLINBOX_MS_CLIENT_ID?.trim() || DEFAULT_CLIENT_ID;
 /** ALLINBOX_MS_TENANT overrides the tenant, for single-tenant app registrations. */
 export const msTenant = (fallback: string): string => process.env.ALLINBOX_MS_TENANT?.trim() || fallback;
