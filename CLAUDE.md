@@ -98,6 +98,9 @@ limited to their own address.
 CI DONE (`.github/workflows/ci.yml`): ubuntu node 20+22 run all 19 tests incl. GreenMail integration
 (`REQUIRE_INTEGRATION=1` makes a skip fail there); windows + macos node 22 run the 14 unit tests.
 Demo media lives in `docs/media/` (GIF for the README, MP4 for posts); source composition is not in the repo.
+MCP Apps (branch `feat/upbeat-albattani-perof0`, 2026-11-17): inbox view + setup from the chat VERIFIED
+in Claude Desktop (Windows) with real accounts. Claude Desktop renders the views but does not proxy
+view→server tool calls (no `serverTools`), so the agent-routed fallbacks are the path used there.
 Public-repo hygiene: never commit real email addresses, account names or local paths (tests use
 fictional domains). Commits are authored with the GitHub noreply address.
 
