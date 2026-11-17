@@ -103,8 +103,8 @@ It follows the host's theme and language. Other clients keep getting plain text,
 
 The view shows exactly what the agent already receives, renders email as plain text (never HTML),
 loads nothing from the network, and has no button that writes mail: "Draft reply" asks the agent,
-which can only save a draft. Try it with fictional mail: `npx allinbox serve --demo`
-(see [testing in Claude Desktop](docs/testing-claude-desktop.md)).
+which can only save a draft. Try it with fictional mail: `allinbox serve --demo` (from a checkout until the next release;
+see [testing in Claude Desktop](docs/testing-claude-desktop.md)).
 
 ## Security
 
