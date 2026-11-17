@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { OAuthError, accessToken, forgetAccessToken, pollDeviceLogin, startDeviceLogin } from '../src/oauth.ts';
+import { OAuthError, accessToken, describeTokens, forgetAccessToken, pollDeviceLogin, signedInAs, startDeviceLogin } from '../src/oauth.ts';
 import { clearSecret, loadConfig, readSecret, writeSecret, type Account, type SecretStore } from '../src/config.ts';
 import { presetFor, presetForMx } from '../src/providers.ts';
 import { friendlyError } from '../src/onboarding.ts';
@@ -43,8 +43,13 @@ test('device login: asks only for IMAP, waits through pending and slow_down, ret
   assert.equal(device.user_code, 'ABCD1234');
   assert.equal(calls[0].url, 'https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode');
   assert.equal(calls[0].form.get('client_id'), oauth.clientId);
-  // Never SMTP.Send: the token must not be able to send.
-  assert.equal(calls[0].form.get('scope'), 'https://outlook.office.com/IMAP.AccessAsUser.All offline_access');
+  // The only mail permission is IMAP. Never SMTP.Send or anything from Graph: the token must not be able to send.
+  assert.deepEqual(calls[0].form.get('scope')!.split(' ').sort(), [
+    'https://outlook.office.com/IMAP.AccessAsUser.All',
+    'offline_access',
+    'openid',
+    'profile',
+  ]);
 
   const sleeps: number[] = [];
   const tokens = await pollDeviceLogin(oauth, device, fetchFn, async (ms) => void sleeps.push(ms));
@@ -199,7 +204,31 @@ test('withClient logs in to an OAuth account with XOAUTH2 (user + bearer token),
     // A token for another mailbox: the server's refusal becomes the "signed in as someone else?" hint.
     const refused = await withClient(local, async () => 'in', 'other-token').catch((e: unknown) => e);
     assert.match(friendlyError(refused, local).en, /signed in as ana@outlook\.com/);
+    // ...and carries what the server offered, for the details line of a bug report.
+    assert.equal((refused as { serverAuth?: string }).serverAuth, 'AUTH=XOAUTH2 SASL-IR');
   } finally {
     server.close();
   }
+});
+
+test('signedInAs / describeTokens: report who signed in and what was granted, never a token', () => {
+  const jwt = (payload: object) => `h.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.s`;
+  const personal = {
+    access_token: 'EwBopaqueSECRET',
+    refresh_token: 'M.C5refreshSECRET',
+    expires_in: 3600,
+    scope: 'https://outlook.office.com/IMAP.AccessAsUser.All',
+    id_token: jwt({ preferred_username: 'Otra@Hotmail.com' }),
+  };
+  assert.equal(signedInAs(personal), 'Otra@Hotmail.com');
+  const line = describeTokens(personal);
+  assert.match(line, /granted="https:\/\/outlook\.office\.com\/IMAP\.AccessAsUser\.All"/);
+  assert.match(line, /token=opaque\(15\)/); // personal-account tokens are not JWTs
+  assert.match(line, /signed-in-as=Otra@Hotmail\.com/);
+  assert.doesNotMatch(line, /SECRET/);
+
+  const work = { access_token: jwt({ aud: 'https://outlook.office.com', scp: 'IMAP.AccessAsUser.All' }), refresh_token: 'r', expires_in: 1 };
+  assert.match(describeTokens(work), /token=jwt aud=https:\/\/outlook\.office\.com scp="IMAP\.AccessAsUser\.All"/);
+  assert.equal(signedInAs(work), undefined); // no id_token: say "?" instead of guessing
+  assert.match(describeTokens(work), /signed-in-as=\?/);
 });

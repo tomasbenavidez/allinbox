@@ -16,7 +16,9 @@ export const msClientId = (): string => process.env.ALLINBOX_MS_CLIENT_ID?.trim(
 /** ALLINBOX_MS_TENANT overrides the tenant, for single-tenant app registrations. */
 export const msTenant = (fallback: string): string => process.env.ALLINBOX_MS_TENANT?.trim() || fallback;
 
-const SCOPE = 'https://outlook.office.com/IMAP.AccessAsUser.All offline_access';
+// openid + profile add no access to mail: they return an id_token naming the account that signed in,
+// so a sign-in with the wrong Microsoft account can be told apart from a mailbox that refuses IMAP.
+const SCOPE = 'https://outlook.office.com/IMAP.AccessAsUser.All offline_access openid profile';
 const HTTP_TIMEOUT_MS = 15_000;
 const EXPIRY_MARGIN_MS = 60_000;
 
@@ -55,6 +57,34 @@ export interface Tokens {
   access_token: string;
   refresh_token: string;
   expires_in: number;
+  id_token?: string;
+  scope?: string;
+}
+
+/** Claims of a JWT, unverified: only for telling the user what Microsoft returned, never for a decision. */
+function claims(jwt: string | undefined): Record<string, unknown> | undefined {
+  try {
+    return JSON.parse(Buffer.from(jwt!.split('.')[1], 'base64url').toString()) as Record<string, unknown>;
+  } catch {
+    return undefined; // personal-account access tokens are opaque, not JWTs
+  }
+}
+
+/** The address the user signed in with at Microsoft, when the id_token says. */
+export function signedInAs(tokens: Tokens): string | undefined {
+  const id = claims(tokens.id_token);
+  const who = id?.preferred_username ?? id?.email;
+  return typeof who === 'string' ? who : undefined;
+}
+
+/** What Microsoft granted, for a bug report. Never includes a token. */
+export function describeTokens(tokens: Tokens): string {
+  const access = claims(tokens.access_token);
+  return [
+    `granted="${tokens.scope ?? '?'}"`,
+    access ? `token=jwt aud=${String(access.aud)} scp="${String(access.scp)}"` : `token=opaque(${tokens.access_token.length})`,
+    `signed-in-as=${signedInAs(tokens) ?? '?'}`,
+  ].join(' | ');
 }
 
 /** Step 1: get the short code the user types at `verification_uri`. */

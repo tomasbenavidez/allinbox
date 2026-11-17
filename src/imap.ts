@@ -56,7 +56,12 @@ export async function withClient<T>(account: Account, fn: (c: ImapFlow) => Promi
     await client.connect();
     return await fn(client);
   } catch (e) {
-    throw timedOut ? new Error(`${account.id} timed out after ${OPERATION_TIMEOUT_MS / 1000}s`) : e;
+    if (timedOut) throw new Error(`${account.id} timed out after ${OPERATION_TIMEOUT_MS / 1000}s`);
+    // Which login mechanisms the server offered: the first thing to know when it refuses a token.
+    if (e instanceof Error) {
+      (e as Error & { serverAuth?: string }).serverAuth = [...client.capabilities.keys()].filter((c) => /^AUTH=|^SASL-IR$/.test(c)).join(' ');
+    }
+    throw e;
   } finally {
     clearTimeout(deadline);
     if (client.usable) await client.logout().catch(() => client.close());

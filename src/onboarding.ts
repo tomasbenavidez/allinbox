@@ -9,7 +9,7 @@ import { loadConfig, saveConfig, setPassword, type Account, type Config } from '
 import { resolveMx } from 'node:dns/promises';
 import { presetFor, presetForMx, type Preset } from './providers.js';
 import { searchAccount } from './imap.js';
-import { OAuthError, forgetAccessToken, msClientId, msTenant, pollDeviceLogin, startDeviceLogin } from './oauth.js';
+import { OAuthError, describeTokens, forgetAccessToken, msClientId, msTenant, pollDeviceLogin, signedInAs, startDeviceLogin, type Tokens } from './oauth.js';
 import { AGENTS, type InstallResult } from './agents.js';
 import { tr, isYes, type L } from './i18n.js';
 
@@ -83,6 +83,13 @@ function openUrl(url: string): void {
   child.unref();
 }
 
+/** The server answered and said no to the credentials (as opposed to a network problem). */
+function isAuthRefusal(e: unknown): boolean {
+  const err = e as { authenticationFailed?: boolean; responseText?: string; message?: string };
+  return Boolean(err.authenticationFailed) ||
+    /AUTHENTICATIONFAILED|Invalid credentials|LOGIN failed|AUTHENTICATE failed/i.test(`${err.responseText ?? ''} ${err.message ?? ''}`);
+}
+
 /** Turn IMAP/network errors into something a non-developer can act on. */
 export function friendlyError(e: unknown, account: Pick<Account, 'host' | 'port'> & Partial<Pick<Account, 'email' | 'oauth'>>): L {
   if (e instanceof OAuthError) {
@@ -100,9 +107,9 @@ export function friendlyError(e: unknown, account: Pick<Account, 'host' | 'port'
     }
     return { en: `Microsoft refused the sign-in: ${e.message}`, es: `Microsoft rechazó el inicio de sesión: ${e.message}` };
   }
-  const err = e as { authenticationFailed?: boolean; code?: string; responseText?: string; message?: string };
+  const err = e as { code?: string; responseText?: string; message?: string };
   const text = `${err.responseText ?? ''} ${err.message ?? ''}`;
-  const authFailed = err.authenticationFailed || /AUTHENTICATIONFAILED|Invalid credentials|LOGIN failed|AUTHENTICATE failed/i.test(text);
+  const authFailed = isAuthRefusal(e);
   if (authFailed && account.oauth) {
     // The sign-in itself worked (we hold a token); it is the mailbox that said no.
     const who = account.email ?? '';
@@ -178,6 +185,54 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const MAX_TRIES = 3;
 
 /**
+ * The sign-in worked; now the mailbox has to accept the token. A retry reuses the same token (valid
+ * for about an hour), so fixing a mailbox setting does not cost another trip to the browser.
+ */
+async function connectMailbox(account: Account, tokens: Tokens): Promise<'connected' | 'sign-in-again' | 'gave-up'> {
+  for (let attempt = 1; ; attempt++) {
+    stdout.write(dim(tr({ en: 'Connecting to the mailbox... ', es: 'Conectando con la casilla... ' })));
+    try {
+      // Test first, store after: a failed retry must never overwrite a working sign-in.
+      await searchAccount(account, { sinceDays: 1, limit: 1 }, tokens.access_token);
+      setPassword(account.id, tokens.refresh_token);
+      forgetAccessToken(account.id);
+      console.log('');
+      ok(tr({ en: `${account.email} connected.`, es: `${account.email} conectada.` }));
+      return 'connected';
+    } catch (e) {
+      console.log('');
+      const who = signedInAs(tokens);
+      if (isAuthRefusal(e) && who && who.toLowerCase() !== account.email.toLowerCase()) {
+        warn(tr({
+          en: `You signed in as ${who}, not as ${account.email}. If both are the same mailbox, add it as ${who} instead.`,
+          es: `Entraste como ${who}, no como ${account.email}. Si las dos son la misma casilla, agregala como ${who}.`,
+        }));
+        return (await confirm({ en: `Sign in again as ${account.email}?`, es: `¿Iniciás sesión de nuevo como ${account.email}?` }, true))
+          ? 'sign-in-again'
+          : 'gave-up';
+      }
+      warn(tr(friendlyError(e, account)));
+      // What the server actually said: the hint above is a guess, this is what a bug report needs.
+      const err = e as { responseText?: string; response?: unknown; message?: string; oauthError?: unknown; serverAuth?: string };
+      const said = err.responseText ?? (typeof err.response === 'string' ? err.response : err.message) ?? '';
+      const details = [
+        `server="${said.trim()}"`,
+        err.oauthError ? `challenge=${JSON.stringify(err.oauthError)}` : '',
+        err.serverAuth ? `offers="${err.serverAuth}"` : '',
+        `tenant=${account.oauth?.tenant}`,
+        describeTokens(tokens),
+      ].filter(Boolean).join(' | ');
+      console.log(dim(`  ${tr({ en: 'Details (no passwords or tokens):', es: 'Detalle (sin contraseñas ni tokens):' })} ${details}`));
+      const again = attempt < MAX_TRIES && (await confirm({
+        en: 'Try the mailbox again? (same sign-in, no browser needed)',
+        es: '¿Pruebo la casilla de nuevo? (mismo inicio de sesión, sin ir al navegador)',
+      }, true));
+      if (!again) return 'gave-up';
+    }
+  }
+}
+
+/**
  * Microsoft accounts: the user signs in on Microsoft's own page and types a short code; allinbox
  * never sees the password. Also used by `allinbox login` when a sign-in expires.
  */
@@ -212,13 +267,10 @@ export async function microsoftSignIn(account: Account): Promise<boolean> {
       }
       stdout.write(dim(tr({ en: 'Waiting for you to finish in the browser... ', es: 'Esperando a que termines en el navegador... ' })));
       const tokens = await pollDeviceLogin(oauth, device);
-      // Test first, store after: a failed retry must never overwrite a working sign-in.
-      await searchAccount(account, { sinceDays: 1, limit: 1 }, tokens.access_token);
-      setPassword(account.id, tokens.refresh_token);
-      forgetAccessToken(account.id);
       console.log('');
-      ok(tr({ en: `${account.email} connected.`, es: `${account.email} conectada.` }));
-      return true;
+      const result = await connectMailbox(account, tokens);
+      if (result === 'connected') return true;
+      if (result === 'gave-up') return false;
     } catch (e) {
       console.log('');
       warn(tr(friendlyError(e, account)));

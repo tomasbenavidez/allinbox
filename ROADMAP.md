@@ -43,10 +43,17 @@ Left:
 1. ~~Register the shared app in Microsoft Entra~~ Done ("Any Entra ID Tenant + Personal Microsoft
    accounts", public client flows on); its id is `DEFAULT_CLIENT_ID` in `src/oauth.ts`. Microsoft's
    device-code endpoint accepts it for both `consumers` and `organizations`.
-2. Real-account test on a personal Outlook/Hotmail mailbox (still pending). A first try on a
-   university Microsoft 365 tenant got through the device-code page and stopped at Microsoft's
-   "Need admin approval" screen (app shown as unverified), so nothing past consent is tested yet.
-   To confirm there:
+2. Real-account test, in progress:
+   - University Microsoft 365 tenant: got through the device-code page and stopped at Microsoft's
+     "Need admin approval" screen (app shown as unverified).
+   - Personal outlook.es mailbox: sign-in and consent work and a token is issued, but the IMAP
+     server answers `AUTHENTICATE failed` with IMAP switched on (the setting is where the error
+     message says: Settings > Mail > Forwarding and IMAP). **Open.** The CLI now prints what the
+     server said, what was granted and who signed in; next step is reading that line. Suspects:
+     a new mailbox or a just-enabled IMAP setting that has not propagated, a sign-in with another
+     Microsoft account, or the `consumers` tenant (try `ALLINBOX_MS_TENANT=common`).
+
+   Still to confirm once a login succeeds:
    special-use `\Drafts` detection, `TEXT` search speed, the wording of the IMAP setting in outlook.com.
 3. Then the README can announce it.
 
