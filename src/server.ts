@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { loadConfig, type Account, type Config } from './config.js';
+import { demoConfig, demoMail, type MailBackend } from './demo.js';
 import { readMessage, readThread, searchAll } from './imap.js';
 import { createDraft } from './drafts.js';
 import { formatHits } from './clean.js';
@@ -51,12 +52,25 @@ function parseId(config: Config, id: string): { account: Account; uid: number } 
   return { account, uid: Number(id.slice(sep + 1)) };
 }
 
+const imapMail: MailBackend = { searchAll, readMessage, readThread };
+const log = (msg: string) => process.stderr.write(`[allinbox] ${msg}\n`); // agents keep stderr in their MCP logs
+
 /** Config is read once at startup: changing it (e.g. enabling drafts) needs an agent restart. */
-export async function createServer(config: Config): Promise<McpServer> {
+export async function createServer(config: Config, mail: MailBackend = imapMail, demo = false): Promise<McpServer> {
   const server = new McpServer(
     { name: 'allinbox', version: VERSION },
-    { instructions: instructions(config.drafts.enabled) },
+    {
+      instructions:
+        (demo ? 'DEMO MODE: these are fictional mailboxes (personal, work, studio), not the user\'s real mail.\n' : '') +
+        instructions(config.drafts.enabled),
+    },
   );
+  // One line that answers "does this client render the inbox view?" when testing a new agent.
+  server.server.oninitialized = () => {
+    const client = server.server.getClientVersion();
+    const ui = server.server.getClientCapabilities()?.extensions?.['io.modelcontextprotocol/ui'];
+    log(`${VERSION}${demo ? ' (demo)' : ''} connected to ${client?.name ?? '?'} ${client?.version ?? ''}; MCP Apps view: ${ui ? 'supported' : 'not advertised'}`);
+  };
 
   server.registerTool(
     'list_accounts',
@@ -87,7 +101,7 @@ export async function createServer(config: Config): Promise<McpServer> {
     },
     async ({ query, since_days, limit, accounts }) => {
       try {
-        const { hits, errors } = await searchAll(pickAccounts(config, accounts), { query, sinceDays: since_days, limit });
+        const { hits, errors } = await mail.searchAll(pickAccounts(config, accounts), { query, sinceDays: since_days, limit });
         const failures = errors.map((e) => `! ${e.account} failed: ${e.error}`).join('\n');
         return text(wrapUntrusted('kind="search_results"', formatHits(hits)) + (failures ? `\n${failures}` : ''));
       } catch (e) {
@@ -106,7 +120,7 @@ export async function createServer(config: Config): Promise<McpServer> {
     async ({ id, max_chars }) => {
       try {
         const { account, uid } = parseId(config, id);
-        return untrusted(id, await readMessage(account, uid, max_chars));
+        return untrusted(id, await mail.readMessage(account, uid, max_chars));
       } catch (e) {
         return fail(errMsg(e));
       }
@@ -125,7 +139,7 @@ export async function createServer(config: Config): Promise<McpServer> {
     async ({ id, max_chars }) => {
       try {
         const { account, uid } = parseId(config, id);
-        return untrusted(id, await readThread(account, uid, max_chars));
+        return untrusted(id, await mail.readThread(account, uid, max_chars));
       } catch (e) {
         return fail(errMsg(e));
       }
@@ -136,7 +150,10 @@ export async function createServer(config: Config): Promise<McpServer> {
     'inbox_view',
     VIEW_URI,
     { title: 'allinbox inbox', description: 'Interactive view of search_all results.', mimeType: VIEW_MIME },
-    async () => ({ contents: [{ uri: VIEW_URI, mimeType: VIEW_MIME, text: viewHtml(), _meta: VIEW_RESOURCE_META }] }),
+    async () => {
+      log('inbox view requested by the client');
+      return { contents: [{ uri: VIEW_URI, mimeType: VIEW_MIME, text: viewHtml(), _meta: VIEW_RESOURCE_META }] };
+    },
   );
 
   if (config.drafts.enabled) {
@@ -179,7 +196,7 @@ export async function createServer(config: Config): Promise<McpServer> {
   return server;
 }
 
-export async function serveStdio(): Promise<void> {
-  const server = await createServer(await loadConfig());
+export async function serveStdio(demo = false): Promise<void> {
+  const server = demo ? await createServer(demoConfig(), demoMail, true) : await createServer(await loadConfig());
   await server.connect(new StdioServerTransport());
 }

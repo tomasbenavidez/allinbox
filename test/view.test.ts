@@ -37,3 +37,18 @@ test('the view resource is self-contained HTML that never injects email text as 
   assert.deepEqual((c._meta as { ui: { csp: unknown } }).ui.csp, { connectDomains: [], resourceDomains: [] });
   await client.close();
 });
+
+test('demo mode serves fictional mail through the real tools, dedupe and wrapper included', async () => {
+  const { demoConfig, demoMail } = await import('../src/demo.ts');
+  const server = await createServer(demoConfig(), demoMail, true);
+  const client = new Client({ name: 'test', version: '0' });
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await Promise.all([server.connect(a), client.connect(b)]);
+  const text = (r: unknown) => (r as { content: { text: string }[] }).content[0].text;
+  const search = text(await client.callTool({ name: 'search_all', arguments: { query: 'invoice' } }));
+  assert.match(search, /^<untrusted_email_[0-9a-f]+ kind="search_results">/);
+  assert.match(search, /Invoice #2291 \| November \(also in studio\)/); // same Message-ID in two accounts → one hit
+  const thread = text(await client.callTool({ name: 'read_thread', arguments: { id: 'work:4407' } }));
+  assert.equal(thread.match(/^--- work:\d+ ---$/gm)?.length, 2);
+  await client.close();
+});

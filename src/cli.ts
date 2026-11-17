@@ -16,7 +16,8 @@ const HELP = `allinbox — all your inboxes, one query, any agent.
   allinbox list         list configured accounts
   allinbox remove ID    remove an account and its stored password
   allinbox test [ID]    check that accounts can connect
-  allinbox serve        force MCP server mode (stdio)`;
+  allinbox serve        force MCP server mode (stdio)
+  allinbox serve --demo MCP server with fictional mailboxes (try it without real mail)`;
 
 async function add(): Promise<void> {
   const config = await loadConfig();
@@ -56,7 +57,7 @@ async function main(): Promise<void> {
       // Agents spawn us with piped stdio; a human runs us in a terminal.
       return process.stdin.isTTY ? onboarding() : serveStdio();
     case 'serve':
-      return serveStdio();
+      return serveStdio(arg === '--demo');
     case 'setup':
       return onboarding();
     case 'add':

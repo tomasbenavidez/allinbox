@@ -22,6 +22,7 @@ TypeScript (tsc 7) · Node >= 20.12 · `@modelcontextprotocol/sdk` · `imapflow`
 | `src/imap.ts` | IMAP: `withClient` (timeouts, error listener), search, read, thread. |
 | `src/drafts.ts` | Draft via IMAP APPEND to `\Drafts`; recipient allowlist. |
 | `src/view.ts`, `src/view.html` | MCP Apps inbox view (`ui://allinbox/inbox.html`) linked from `search_all`. One self-contained HTML file, copied to dist by `scripts/copy-view.mjs`. |
+| `src/demo.ts` | `serve --demo`: fictional mailboxes behind the same backend interface as IMAP (agent/UI testing, demo recordings). |
 | `src/clean.ts` | Pure: `cleanBody`, `mergeHits` (dedupe by Message-ID), `formatHits`, `normalizeSubject`. |
 | `src/onboarding.ts` | Bilingual guided setup: accounts → drafts opt-in → connect agents. |
 | `src/agents.ts` | Detects agents, writes their MCP configs (backup + atomic write). |
@@ -61,6 +62,8 @@ pnpm build
 node dist/cli.js setup   # try onboarding (ALLINBOX_HOME=<tmp> to keep your real config clean)
 ```
 Gotchas:
+- Testing the view in Claude Desktop: `docs/testing-claude-desktop.md`. stderr logs
+  `MCP Apps view: supported | not advertised` on connect (Claude Desktop keeps it in `mcp-server-<name>.log`).
 - `pnpm preview:ui` serves the inbox view in a fake MCP Apps host (fictional mail, hostile sample
   included) at http://127.0.0.1:5180 to iterate on the design without Claude.
 - GreenMail reports the Draft flag with an extra backslash; real servers report `\Draft`
