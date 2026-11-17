@@ -135,6 +135,11 @@
       tryIt: 'Search all my email', ask: 'Show me my latest email across all my accounts.',
       foot: 'Passwords never go through the chat: they are typed in a local page and stored in your system keychain.',
       demo: 'Demo mode: nothing is saved for real. Any password works except "wrong".',
+      askOpen: (e) => `Open the allinbox secure page to connect ${e} (setup_accounts with email).`,
+      askManage: 'Open the allinbox page to manage accounts and drafts (setup_accounts with manage).',
+      asked: 'Asked Claude to open the secure window in your browser…',
+      openedFor: (e) => `A secure window opened in your browser to connect ${e}. Follow the steps there; it tells you when it is done.`,
+      openedManage: 'The page to manage accounts and drafts opened in your browser.',
     },
     es: {
       title: 'Cuentas', accounts: 'Conectadas', none: 'Todavía no hay cuentas.', add: 'Agregar una cuenta',
@@ -153,6 +158,11 @@
       tryIt: 'Buscar en todas mis casillas', ask: 'Mostrame mis últimos mails de todas mis cuentas.',
       foot: 'Las contraseñas nunca pasan por el chat: se escriben en una página local y van al llavero del sistema.',
       demo: 'Modo demo: no se guarda nada de verdad. Sirve cualquier contraseña menos "wrong".',
+      askOpen: (e) => `Abrí la ventana segura de allinbox para conectar ${e} (setup_accounts con email).`,
+      askManage: 'Abrí la página de allinbox para administrar cuentas y borradores (setup_accounts con manage).',
+      asked: 'Le pedí a Claude que abra la ventana segura en tu navegador…',
+      openedFor: (e) => `Se abrió una ventana segura en tu navegador para conectar ${e}. Seguí los pasos ahí; te avisa cuando termina.`,
+      openedManage: 'Se abrió en tu navegador la página para administrar cuentas y borradores.',
     },
   };
   let lang = 'en';
@@ -177,6 +187,7 @@
     if (!m || m.jsonrpc !== '2.0') return;
     if (m.method) {
       if (m.method === 'ui/notifications/tool-input') { const em = m.params?.arguments?.email; if (em && !$('email').value) $('email').value = em; }
+      else if (m.method === 'ui/notifications/tool-result') onToolResult(textOf(m.params));
       else if (m.method === 'ui/notifications/host-context-changed') applyContext(m.params || {});
       if (m.id !== undefined) post({ id: m.id, result: {} });
     } else if (m.id !== undefined && pending.has(m.id)) {
@@ -206,7 +217,24 @@
   }
 
   // ---------- State ----------
-  const S = { state: null, info: null, url: null, poll: null, mode: null, opened: {} };
+  const S = { state: null, info: null, url: null, poll: null, mode: null, opened: {}, note: '' };
+  let caps = {};
+
+  // Hosts that cannot proxy tool calls still send us the setup_accounts result: read it.
+  function onToolResult(text) {
+    const acc = /^Connected accounts: (.*)$/m.exec(text || '');
+    const add = /Opened a secure page in the user's browser to connect (\S+?):/.exec(text || '');
+    if (caps.serverTools) return;
+    S.state = {
+      accounts: acc && acc[1] !== 'none' ? acc[1].split(', ') : [],
+      drafts: null,
+      status: add ? { state: 'waiting', mode: 'add', email: add[1] } : /manage accounts and drafts/.test(text) ? { state: 'waiting', mode: 'manage' } : { state: 'idle' },
+    };
+    if (add) S.note = t('openedFor', add[1]);
+    else if (S.state.status.mode === 'manage') S.note = t('openedManage');
+    renderState();
+  }
+  const ask = (text) => request('ui/message', { role: 'user', content: [{ type: 'text', text }] }).catch(() => {});
 
   function staticText() {
     $('title').textContent = t('title');
@@ -224,7 +252,9 @@
     const ul = $('accounts'); ul.replaceChildren();
     if (!st.accounts.length) ul.append(el('li', 'muted', t('none')));
     for (const a of st.accounts) { const li = el('li'); li.append(el('span', 'check', '✓'), el('span', null, a)); ul.append(li); }
-    $('drafts').textContent = st.drafts.enabled ? t('draftsOn', st.drafts.allowRecipients.join(', ')) : t('draftsOff');
+    $('drafts').textContent = !st.drafts ? '' : st.drafts.enabled ? t('draftsOn', st.drafts.allowRecipients.join(', ')) : t('draftsOff');
+    $('add-error').className = S.note ? 'status wait' : 'status err';
+    if (S.note) $('add-error').textContent = S.note;
     staticText();
     renderFlow();
     resize();
@@ -283,6 +313,7 @@
   }
 
   async function refresh() {
+    if (!caps.serverTools) return renderState();
     try { S.state = await call('setup_state'); } catch {}
     renderState();
     const st = S.state?.status?.state;
@@ -316,16 +347,27 @@
   $('add').addEventListener('submit', async (e) => {
     e.preventDefault();
     $('add-error').textContent = '';
+    S.note = '';
+    if (!caps.serverTools) { // the agent opens the secure page (setup_accounts with email)
+      const em = $('email').value.trim();
+      S.note = t('asked'); renderState(); ask(t('askOpen', em));
+      return;
+    }
     $('go').disabled = true;
     try { S.info = await call('setup_detect', { email: $('email').value.trim() }); S.url = null; S.opened = {}; }
     catch (err) { S.info = null; $('add-error').textContent = err.message; }
     $('go').disabled = false;
     renderState();
   });
-  $('manage').addEventListener('click', () => openSecure('manage'));
+  $('manage').addEventListener('click', () => {
+    if (caps.serverTools) return openSecure('manage');
+    S.note = t('asked'); renderState(); ask(t('askManage'));
+  });
 
   let lastH = 0;
+  let ready = false; // nothing but ui/initialize may go to the host before the handshake
   function resize() {
+    if (!ready) return;
     requestAnimationFrame(() => {
       const h = Math.ceil($('app').getBoundingClientRect().height);
       if (h !== lastH) { lastH = h; notify('ui/notifications/size-changed', { height: h }); }
@@ -339,8 +381,11 @@
     appCapabilities: {},
     protocolVersion: '2026-01-26',
   }).then((r) => {
+    caps = r?.hostCapabilities || {};
     applyContext(r?.hostContext || {});
     notify('ui/notifications/initialized');
+    ready = true;
+    resize();
     refresh();
   }).catch(() => {});
 })();

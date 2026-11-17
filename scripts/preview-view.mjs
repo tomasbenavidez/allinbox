@@ -47,6 +47,8 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><title>allinbox �
 const VIEW = ${JSON.stringify(VIEW_HTML).replace(/</g, '\\u003c')};
 const SETUP = ${JSON.stringify(SETUP_HTML).replace(/</g, '\\u003c')};
 let tool = 'search_all';
+// ?tools=0 behaves like Claude Desktop today: no tool proxying from views, only ui/message.
+const noTools = new URLSearchParams(location.search).get('tools') === '0';
 const iframe = document.getElementById('view');
 const log = (s) => { const l = document.getElementById('log'); l.textContent = s + '\\n' + l.textContent; };
 let ctx = { theme: 'light', locale: 'es-AR', timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -61,14 +63,22 @@ window.addEventListener('message', async (e) => {
   switch (m.method) {
     case 'ui/initialize':
       return reply({ protocolVersion: '2026-01-26', hostInfo: { name: 'preview-host', version: '0' },
-        hostCapabilities: { serverTools: {}, message: { text: {} }, openLinks: {} }, hostContext: ctx });
+        hostCapabilities: { ...(noTools ? {} : { serverTools: {} }), message: { text: {} }, openLinks: {} }, hostContext: ctx });
     case 'ui/notifications/initialized':
       send({ method: 'ui/notifications/tool-input', params: { arguments: args } });
       return setTimeout(async () => send({ method: 'ui/notifications/tool-result', params: await call(tool, args) }), 700);
     case 'ui/notifications/size-changed':
       if (ctx.displayMode === 'inline') iframe.style.height = m.params.height + 'px'; return;
-    case 'tools/call': log('view → tools/call ' + JSON.stringify(m.params)); return reply(await call(m.params.name, m.params.arguments));
-    case 'ui/message': log('view → ui/message (Claude would get this as a user turn): ' + m.params.content[0].text); return reply({});
+    case 'tools/call': if (noTools) return send({ id: m.id, error: { code: -32603, message: 'IPC not available for MCP tool call' } }); log('view → tools/call ' + JSON.stringify(m.params)); return reply(await call(m.params.name, m.params.arguments));
+    case 'ui/message': {
+      const text = m.params.content[0].text;
+      log('view → ui/message (Claude would get this as a user turn): ' + text);
+      reply({});
+      // Play the agent: a request to open the secure page becomes a setup_accounts call.
+      const em = /(?:conectar|connect) ([^ ]+@[^ ]+?) [(]/.exec(text);
+      if (em) setTimeout(() => run({ email: em[1] }, text, 'setup_accounts'), 400);
+      return;
+    }
     case 'ui/request-display-mode':
       ctx.displayMode = m.params.mode; document.body.classList.toggle('fs', ctx.displayMode === 'fullscreen');
       iframe.style.height = ctx.displayMode === 'fullscreen' ? '100vh' : iframe.style.height;

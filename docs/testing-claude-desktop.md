@@ -71,6 +71,13 @@ Ask: **"Add my Gmail account"**. Claude calls `setup_accounts` and the setup ass
 
 In `--demo` nothing touches your keychain or `~/.allinbox`.
 
+Claude Desktop does not yet let views call the server's tools ("IPC not available for MCP tool
+call"; the host does not advertise `serverTools`). Both views detect this and route actions through
+the agent instead (`ui/message`): "Continue" asks Claude to call `setup_accounts` with the address,
+and allinbox opens the secure page itself, which shows the provider steps and the password field.
+In the inbox, opening a thread or searching again becomes a chat request. Reproduce it with
+`pnpm preview:ui` and `?tools=0`.
+
 ## 6. Real accounts
 
 ```bash

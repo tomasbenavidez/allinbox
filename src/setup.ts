@@ -165,9 +165,27 @@ export class SetupDesk {
       : `<p class="muted">${esc(this.t({ en: `I don't know ${domain} yet: your provider's IMAP settings.`, es: `Todavía no conozco ${domain}: necesito los datos IMAP de tu proveedor.` }))}</p>
          <label>Host<input name="host" required value="${esc(host || `imap.${domain}`)}" autocomplete="off"></label>
          <label>${esc(this.t({ en: 'Port', es: 'Puerto' }))}<input name="port" required inputmode="numeric" value="${esc(port || '993')}"></label>`;
+    // The page is self-sufficient: the provider steps live here too, for hosts whose chat view
+    // cannot run tools or open links.
+    const p = s.preset;
+    const link = (url: string) => {
+      const href = esc(p?.forAccount?.(url, s.email!) ?? url);
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${esc(this.t({ en: 'Open', es: 'Abrir' }))} ↗</a>`;
+    };
+    const steps = p?.appPassword
+      ? `<ol class="steps">
+          ${p.twoStep ? `<li><b>${esc(this.t({ en: 'Turn on 2-Step Verification', es: 'Activá la verificación en 2 pasos' }))}</b> ${link(p.twoStep.url)}
+            <div class="muted small">${esc(this.t({ en: 'Skip if it is already on. ', es: 'Salteá si ya la tenés. ' }) + this.t(p.twoStep.symptom))}</div></li>` : ''}
+          <li><b>${esc(this.t({ en: 'Create an app password', es: 'Creá una contraseña de aplicación' }))}</b> ${link(p.appPassword.url)}
+            <div class="muted small">${esc(this.t(p.appPassword.steps))}</div></li>
+          <li><b>${esc(this.t({ en: 'Paste it below', es: 'Pegala acá abajo' }))}</b></li>
+        </ol>`
+      : '';
     return this.page(
       this.t({ en: 'Connect', es: 'Conectar' }) + ` ${s.email}`,
       `${error ? `<p class="error">${esc(error)}</p>` : ''}
+       ${p?.warning ? `<p class="warn small">${esc(this.t(p.warning))}</p>` : ''}
+       ${steps}
        <form method="post" action="/add">
          <input type="hidden" name="t" value="${s.token}">
          <p class="muted">${esc(s.preset?.label ?? '')}</p>
@@ -302,6 +320,8 @@ export class SetupDesk {
   button { margin-top:16px; padding:9px 16px; border:0; border-radius:8px; background:var(--fg); color:var(--bg); font:inherit; font-weight:600; cursor:pointer; }
   button.secondary { margin:0; padding:4px 10px; background:transparent; color:var(--fg); border:1px solid var(--line); font-weight:500; font-size:13px; }
   .accounts { list-style:none; padding:0; margin:0; } .accounts li { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
+  .steps { padding-left:20px; margin:0 0 4px; } .steps li { margin:10px 0; } .steps a { color:var(--accent); margin-left:6px; font-size:14px; }
+  .warn { color:var(--accent); }
   .muted { color:var(--muted); } .small { font-size:13px; } .error { color:var(--err); } .ok { color:var(--ok); }
 </style></head><body><main><p class="brand">🔒 allinbox · ${esc(this.t({ en: 'local setup, only on this computer', es: 'configuración local, solo en esta compu' }))}</p>
 <h1>${esc(title)}</h1>${body}</main></body></html>`;

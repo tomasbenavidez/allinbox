@@ -6,6 +6,7 @@ import { deletePassword, loadConfig, saveConfig, setPassword, type Account, type
 import { describeProvider, EMAIL_RE, SetupDesk, type SetupDeps } from './setup.js';
 import { openUrl } from './open.js';
 import { friendlyError } from './onboarding.js';
+import { lang as uiLang } from './i18n.js';
 import { demoConfig, demoMail, demoSetup, type MailBackend } from './demo.js';
 import { readMessage, readThread, searchAccount, searchAll } from './imap.js';
 import { createDraft } from './drafts.js';
@@ -238,19 +239,40 @@ export async function createServer(
     {
       description:
         'Show the user the allinbox setup assistant: connect or remove email accounts and set reply drafts. ' +
-        'Passwords are typed in a local browser page, never in chat. Call it when the user wants to add an account, ' +
-        'when no accounts are configured, or to change drafts.',
-      inputSchema: { email: z.string().max(320).optional().describe('Address the user wants to add, if they said it.') },
+        'With `email`, it also opens a secure local page in the user\'s browser with the provider steps and the ' +
+        'password field; with `manage`, the page to remove accounts and set drafts. Passwords are typed there, ' +
+        'never in chat. Call it when the user wants to add an account, when no accounts are configured, or to change drafts.',
+      inputSchema: {
+        email: z.string().max(320).optional().describe('Address the user wants to add, if they said it.'),
+        manage: z.boolean().optional().describe('Open the page to remove accounts or change drafts.'),
+      },
       annotations: { readOnlyHint: true, openWorldHint: false },
       _meta: SETUP_TOOL_META,
     },
-    async ({ email }) =>
-      text(
-        `The setup assistant is shown to the user${email ? ` for ${email}` : ''}. ` +
-          `Connected accounts: ${config.accounts.map((a) => a.id).join(', ') || 'none'}. ` +
-          'If the assistant is not visible (client without MCP Apps), tell the user to run "npx allinbox" in a terminal. ' +
-          'Do not ask for passwords in chat.',
-      ),
+    async ({ email, manage }) => {
+      let opened = '';
+      const e = email?.trim().toLowerCase();
+      try {
+        if (manage) {
+          await desk.open('manage', uiLang);
+          opened = 'Opened the secure page to manage accounts and drafts in the user\'s browser.';
+        } else if (e && EMAIL_RE.test(e) && !config.accounts.some((a) => a.id === e)) {
+          await desk.open('add', uiLang, e);
+          opened = `Opened a secure page in the user's browser to connect ${e}: it shows the steps and the password field.`;
+        } else if (e && config.accounts.some((a) => a.id === e)) {
+          opened = `${e} is already connected.`;
+        }
+      } catch (err) {
+        opened = `Could not open the secure page: ${errMsg(err)}`;
+      }
+      // Line 1 is read by the setup view; keep its format.
+      return text(
+        `Connected accounts: ${config.accounts.map((a) => a.id).join(', ') || 'none'}\n` +
+          (opened ? `${opened}\n` : '') +
+          'Do not ask for passwords in chat. If no assistant is visible (client without MCP Apps), the secure page ' +
+          'still works; otherwise tell the user to run "npx allinbox" in a terminal.',
+      );
+    },
   );
   server.registerTool(
     'setup_state',

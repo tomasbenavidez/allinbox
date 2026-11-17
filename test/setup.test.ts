@@ -101,3 +101,16 @@ test('the model is told to use the assistant, never to ask for passwords', async
   const { call } = await setup();
   assert.match(await call('setup_accounts', { email: 'x@y.com' }), /Do not ask for passwords in chat/);
 });
+
+test('setup_accounts with an email opens the secure page itself (hosts without tool proxying)', async () => {
+  const { call, opened } = await setup();
+  const out = await call('setup_accounts', { email: 'Bob@Gmail.com' });
+  assert.match(out, /^Connected accounts: personal, work, studio$/m); // the view parses this line
+  assert.match(out, /Opened a secure page in the user's browser to connect bob@gmail\.com:/);
+  assert.equal(opened.length, 1);
+  const page = await (await fetch(opened[0])).text();
+  assert.match(page, /apppasswords\?authuser=bob%40gmail\.com/); // provider steps live on the page too
+  assert.doesNotMatch(out, /127\.0\.0\.1|t=/); // the one-time URL never reaches the model
+  assert.match(await call('setup_accounts', { email: 'work' }), /^Connected accounts:/);
+  assert.match(await call('setup_accounts', { manage: true }), /manage accounts and drafts/);
+});

@@ -155,6 +155,8 @@
       askSummarize: (id) => `Summarize the email thread ${id} (use allinbox read_thread).`,
       askDraft: (id) => `Help me draft a reply to email ${id}. Read the thread first, show me the draft, and only save it to Drafts if I confirm.`,
       err: 'Could not load this conversation.', attachments: 'Attachments',
+      openThread: 'Open in chat', askThread: (id) => `Show me the full email thread ${id} (use allinbox read_thread).`,
+      askSearch: (q, d) => `Search all my email${q ? ` for "${q}"` : ''} from the last ${d} days (allinbox search_all).`,
     },
     es: {
       searching: (n) => `Buscando en ${n ? n + ' casillas' : 'todas las casillas'}…`,
@@ -168,6 +170,8 @@
       askSummarize: (id) => `Resumí el hilo del mail ${id} (usá read_thread de allinbox).`,
       askDraft: (id) => `Ayudame con un borrador de respuesta al mail ${id}. Leé el hilo primero, mostrame el borrador y guardalo en Borradores solo si confirmo.`,
       err: 'No se pudo cargar la conversación.', attachments: 'Adjuntos',
+      openThread: 'Abrir en el chat', askThread: (id) => `Mostrame el hilo completo del mail ${id} (usá read_thread de allinbox).`,
+      askSearch: (q, d) => `Buscá en todas mis casillas${q ? ` "${q}"` : ''} de los últimos ${d} días (search_all de allinbox).`,
     },
   };
   let lang = 'en';
@@ -356,7 +360,8 @@
   function reader(h) {
     const box = el('div', 'reader');
     const th = S.threads[h.id];
-    if (!th) box.append(el('div', 'note', t('loading')));
+    if (!caps.serverTools) { /* host cannot proxy tools: actions below go through the agent */ }
+    else if (!th) box.append(el('div', 'note', t('loading')));
     else if (th.error) box.append(el('div', 'note', t('err') + ' ' + th.error));
     else for (const m of th.messages) {
       const card = el('div', 'msg');
@@ -376,6 +381,7 @@
       };
       return b;
     };
+    if (!caps.serverTools) actions.append(ask(t('openThread'), '', t('askThread', h.id)));
     actions.append(ask(t('summarize'), '', t('askSummarize', h.id)), ask(t('draft'), '', t('askDraft', h.id)));
     const close = el('button', 'btn', t('close')); close.type = 'button'; close.onclick = () => toggle(h.id);
     actions.append(close);
@@ -386,7 +392,7 @@
   async function toggle(id) {
     S.open = S.open === id ? null : id;
     render();
-    if (!S.open || S.threads[id]) return;
+    if (!S.open || S.threads[id] || !caps.serverTools) return;
     try {
       const r = await request('tools/call', { name: 'read_thread', arguments: { id, max_chars: 8000 } });
       S.threads[id] = r.isError ? { error: textOf(r) } : { messages: parseThread(textOf(r)) };
@@ -397,6 +403,10 @@
   $('search').addEventListener('submit', async (e) => {
     e.preventDefault();
     const args = { query: $('q').value.trim() || undefined, since_days: Number($('days').value), limit: 50 };
+    if (!caps.serverTools) { // the agent runs the search; its result arrives as a new view
+      request('ui/message', { role: 'user', content: [{ type: 'text', text: t('askSearch', args.query, args.since_days) }] }).catch(() => {});
+      return;
+    }
     onInput(args);
     try { onResult(await request('tools/call', { name: 'search_all', arguments: args })); }
     catch (err) { onResult({ isError: true, content: [{ type: 'text', text: err.message }] }); }
@@ -408,7 +418,9 @@
   });
 
   let lastH = 0;
+  let ready = false; // nothing but ui/initialize may go to the host before the handshake
   function resize() {
+    if (!ready) return;
     requestAnimationFrame(() => {
       const h = Math.ceil(document.getElementById('app').getBoundingClientRect().height);
       if (h !== lastH) { lastH = h; notify('ui/notifications/size-changed', { height: h }); }
@@ -424,9 +436,12 @@
     protocolVersion: '2026-01-26',
   }).then((r) => {
     caps = r?.hostCapabilities || {};
-    $('search').classList.toggle('hidden', !caps.serverTools); // re-search needs the host to proxy tools
+    // Searching again needs either tool proxying or a way to ask the agent.
+    $('search').classList.toggle('hidden', !caps.serverTools && !caps.message);
     applyContext(r?.hostContext || {});
     notify('ui/notifications/initialized');
+    ready = true;
+    resize();
   }).catch(() => {});
 })();
 </script>
